@@ -1,0 +1,135 @@
+******************************************************
+******************************************************
+*
+* Note for embedded WebServer
+*
+******************************************************
+******************************************************
+
+Looking at two options for the hardware setup:
+    1. use JK-micro NEC v25 CPU board
+    2. reuse revived PC-XT, 8086 CPU board
+
+Peripheral options:
+    Both options will require an Ethernet interface -> will use Ethernet ENC28J60
+    PC-XT should replace IDE drive with an interface to an SD memory card -> BIOS changes    
+    Both options can be equipped with an LCD display -> ST7735 Color TFT Display
+
+Background information on SD serial interface:
+    http://www.dejazzer.com/ee379/lecture_notes/lec12_sd_card.pdf
+    http://users.ece.utexas.edu/~valvano/EE345M/view12_SPI_SDC.pdf
+    Recommended site: http://elm-chan.org/docs/mmc/mmc_e.html
+    Also check out Adafruit site on their SD card shield.
+
+======================================================
+ NEC v25 CPU board
+======================================================
+
+1. Use serial interface 1 for console:
+    - change FlashLite BIOS behavior by hooking a replacement console BIOS INT 10?
+    - will FlashLite XDOS support TSR functionality?
+    - option to change consoles only for the running app?
+    - identify cable with non-crossed Tx/Rx?
+
+    Serial 0, J4       Serial 1, J6
+    ---------------    ----------------
+         1 2 DSR0           1 2
+     Tx0 3 4 CTS0       Rx1 3 4 DSR1
+     Rx0 5 6 DSR0       Tx1 5 6
+         7 8           DSR1 7 8 CTS1
+     GND 9 10           GND 9 20
+
+    my cable mapping between 10pin, dual row header to DB9 female
+                            -----------------------    -------------
+                                1  n.c             -->  1  CD
+                                2  n.c             -->  6  DSR
+                                3  Rx              -->  2  Tx
+                                4  DSR             -->  7  CTS
+                                5  Tx              -->  3  Rx
+                                6  n.c             -->  8  RTS
+                                7  DSR             -->  4  DTR
+                                8  CTS             -->  9  RI
+                                9  GND             -->  5  GND
+                               10  n.c             -->  not connected
+    
+    - use both serial ports on PC and FlashLite to check proper communucation using a small loop back program for Ser Port 1
+        using the following setup directories for BC compiler:
+         z:\home\eyal\Documents\web-server\src
+         z:\home\eyal\Documents\web-server\src\include
+         z:\home\eyal\Documents\web-server\src\bin
+        ser1loop.c
+
+    {may abandon this option} writing a TSR fo v25 Flash Lite by testing TSR functionality with tsrtest.c
+    - use a simple TSR to hook into timer tickes and poll a byte that can be changes from a local Basic POKE command
+      Flash Lite BIOS/DOS timer uses v25 timer-1 which is et up as follows:
+        timer-1 control, tmc1: 0xc0   --> interval timer, with Fclk/128 = 78,125Hz
+        timer-1 modulus, md1:  4291   --> after cunting, interrupt every 18.2Hz (ok!)
+        timer-1 interrupt, tmic0: 0x16, tmic1: 0x17, tmic2: 0xc7
+                TMF1 interrupt is generated and handled by register bank switching, vector 29
+        timer-1 macro, tmms0: 0xe6, tmms1: 0x47, tmms2: 0x45
+
+    use multi tasking executive used for my robot project - SMTE - as a basis for a solution that includes:
+    - console task, through serial-1 and a basic CLI list
+    - time task that keeps time of day and general system time tick
+      for debug and potentially interface with NTP...
+    - web server task, maybe this can be used with more than one task copy to enable more than one concurrent connection? maybe add a feature to SMTE that allows dynamic addition and deletion of tasks?
+    - SD card interface task for IO to SD card
+    - LCD display task, matbe part of the console task?
+    - an IP stack task
+
+2. After above, use serial interface 0 as SPI
+    - use this for LCD and SD Card (built into LCD)
+    - need logic level interfacing 3.3v/5v
+    - RxD0 = MISO, TxD0 = MOSI, ^SCK0 + ^CTS0 = SCLK
+    - need a few of IO lines for Slave Select on v25 P.1
+    - what are the usable clock rates?
+3. replace disk services INT 13 with something that can handle or replace B: with SD card "drive"
+4. AVR 328P+Ethernet --> v25 P.0, with either DMA or simple handshaking, both through v25 P.2
+
+======================================================
+ PC-XT, 8086 CPU board
+======================================================
+
+1. Reuse PC-XT 8255 interface for SD card and Ethernet instead of IDE interface.
+2. Split 8255 to Mode 0 port B and Mode 2 port A, with port C serving as hand shake lines
+3. Rewrite BIOS to handle Disk IO INT through new setup above to SD card
+   SD card can be populated/written on a PC -> saves dev time!
+4. Update Minix distro with Ethernet driver and enable network processes
+
+Interfacing SD card with parallel IO interface
+------------------------------------------------------
+
+SD card connects with SPI to AVR 328P that connects through 8255 Mode 1, also can be done with Mode 2.
+However, Mode 2 can only be used on one 8255 bank. So use Mode 0 for AVR (to SD card) and Mode 2 for Ethernet (see below)
+
+Use two AVRs, one for SD interface and one for Ethernet:
+- SD interface AVR 328P (connect to Mode-0 8255 port B bank) – PB is IO, PC0..2 two hand shake lines + RD/WR
+- 8255 Mode 0 port B bank will switch between ‘output’ and ‘input’ modes
+- AVR Port D PD0..7 for data transfer
+- SPI interface for SD card SCLK/MISO/MOSI
+- Dual function with programming – need to remove SD card while programming AVR
+- AVR PB6 for SD card CS
+- AVR PB0  and PB1, for parallel hand shake lines OBF/Ack (OBF can trigger AVR interrupt) or STB/IBF (interrupt trigger?) --> will need to manually bit-bang these functions from the 8255 so that we have enough IO lines left to also implement a ‘read’/’write’ direction. Otherwise we automatically get an interrupt line that I don’t need for the CPU
+- Will need to include a 74245 bi directional buffer between AVR and 8255
+- PB2 set ‘read’ or ‘write’ SD modes (use extra PCx lines on 8255)
+- Can use interrupt only on the AVR side when CPU writes to the SD card?
+- Use polled IO for CPU to AVR/SD
+
+Ethernet interface
+------------------------------------------------------
+
+Ethernet chip to AVR 328P that connects to a Mode 2 8255 port bank
+PA is IO, PC3..7 hand shake
+
+======================================================
+ Notes on compiler
+======================================================
+
+Will be using Borlan C 5 compiler and IDE installed through wine
+Optional to use the command line 'bcc.exe' and linker 'tlink.exe'
+To run the command line versions and use Eclipse as IDE + a traditional Make file will require DOSbox as follows:
+ dosbox -c bcc.exe <options> -c exit
+DOSbox configuration file would have this in the [autoexec] section
+ mount d ~/drive_c/BC5/BIN
+ d:
+
