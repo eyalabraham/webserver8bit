@@ -9,21 +9,19 @@
 
 *************************************************************************** */
 
-#ifndef __SMTE_H__
-#define __SMTE_H__
+#ifndef __LMTE_H__
+#define __LMTE_H__
 
 
 #ifdef __V25__
   #pragma message "**** V25 object code! ****"
 #endif
 
+#include    "internal.h"                /* for basic types */
+
 /* -----------------------------------------
    types
 ----------------------------------------- */
-
-typedef unsigned char BYTE;              /* 8 bit type                       */
-typedef unsigned int  WORD;              /* 16 bit type                      */
-typedef unsigned long DWORD;             /* 32 bit type                      */
 
 typedef enum tag_traceLevel
              {
@@ -177,4 +175,4 @@ getMsecPerTick(void);                    /* get tick interval                */
     data = source line
     type = DWORD            */
 
-#endif  /* __SMTE_H__ */
+#endif  /* __LMTE_H__ */

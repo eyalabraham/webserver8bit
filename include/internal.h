@@ -2,7 +2,7 @@
 
   INTERNAL.H
 
-  Large (model) Multi Task Executive (LMTE) internal header.
+  Large (memory model) Multi Task Executive (LMTE) internal header.
 
   Nov. 4, 2016  - Updated to large model
   July   1 2010 - reduced time to print debug info to 10msec from 100
@@ -20,14 +20,14 @@
 #define MAX_TASKS_EVER    20      // maximum number of tasks
 #define T_NAME_LENGTH     8       // task name identifier length
 #define DEF_STACK_SIZE    512     // default stack size in words
-#define DEF_TASK_TICKS    5       // default task window
+#define DEF_TASK_TICKS    5       // default task time window
 #define DEF_MSGQ_SIZE     1       // default queue size in mssages
 #define DEF_MSEC_PER_TICK 5       // mili-seconds per tick resolution
 
 #define TRACE_WINDOW      5       // mili-sec allocated to print trace info
 #define MAX_TRACE_BUFFER  100     // max trace records
 
-#define ISR_FRAME         8       /* 8 words: ax,si,bx,cx,dx,di,es,bp */
+#define ISR_FRAME         8       /* @@ 8 words: ax,si,bx,cx,dx,di,es,bp */
 
 #define HI(word)          (BYTE) ((word & 0xff00) >> 8)
 #define LO(word)          (BYTE) (word & 0x00ff)
@@ -75,6 +75,11 @@
    internal types and enumerations
 ----------------------------------------- */
 
+typedef unsigned char BYTE;              /* 8 bit type                       */
+typedef unsigned int  WORD;              /* 16 bit type                      */
+typedef unsigned long DWORD;             /* 32 bit type                      */
+
+
 typedef struct taskControlBlock_tag
                {
                 /* task information */                             //  offset
@@ -85,32 +90,32 @@ typedef struct taskControlBlock_tag
                 void                (* task)(void);                //  8
 
                 /* task's stack context */
-                WORD                wStackSize;                    //  10
-                WORD*               pStackBase;                    //  12
-                WORD*               pTopOfStack;                   //  14
+                WORD                wStackSize;                    //  12
+                WORD*               pStackBase;                    //  14
+                WORD*               pTopOfStack;                   //  18
 
                 /* task message queue */
-                int                  nQin;                         //  16
-                int                  nQout;                        //  18
-                int                  nQsize;                       //  20
-                struct message_tag*  pQbase;                       //  22
+                int                  nQin;                         //  22
+                int                  nQout;                        //  24
+                int                  nQsize;                       //  26
+                struct message_tag*  pQbase;                       //  28
 
                 /* form a double linked list */
-                struct taskControlBlock_tag*  pNextCb;             //  24
-                struct taskControlBlock_tag*  pPrevCb;             //  26
+                struct taskControlBlock_tag*  pNextCb;             //  32
+                struct taskControlBlock_tag*  pPrevCb;             //  36
 
                 /* suspention loop count     */
-                DWORD                dwTicksSuspend;               //  28
+                DWORD                dwTicksSuspend;               //  40
 
                 /* message Q usage in message count */
-                int                  nQusage;                      //  32
+                int                  nQusage;                      //  44
 
                 /* message to wait                  */
-                int                  nWaitType;                    //  34
-                int                  nMsgWait;                     //  36
+                int                  nWaitType;                    //  46
+                int                  nMsgWait;                     //  48
 
                 /* task name                        */
-                char                szTaskName[T_NAME_LENGTH + 1]; //  38
+                char                szTaskName[T_NAME_LENGTH + 1]; //  50
                } tasckControlBlock;
 
 typedef struct message_tag

@@ -32,7 +32,8 @@
 
 int main(int argc, char* argv[])
 {
-    struct SFR _far*    pSfr;           // pointed to NEC v25 IO register set
+    struct SFR _far*    pSfr;           // pointer to NEC v25 IO register set
+    //struct SFR*		    pSfr;           // pointer to NEC v25 IO register set
     short int           bInByte;        // input byte to echo
     struct time         sysTime;        // hold system time for timeout calculations
     int                 nTimeofDay = 0; // time of day in seconds
@@ -41,7 +42,7 @@ int main(int argc, char* argv[])
 
     // parse command line parameters:
     // ser1loop [-v]
-    //  '-v' print build and verion information
+    //  '-v' print build and version information
     for ( i = 1; i < argc; i++ )
     {
         if ( strcmp(argv[i], "-v") == 0 )

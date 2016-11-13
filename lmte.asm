@@ -2,10 +2,11 @@
 ;=====================================================
 ;  file: _lmte.asm
 ;
-; Large (model) Multi Task Executive (SMTE) library source code.
+; Large (memory model) Multi Task Executive (SMTE) library source code.
 ;
+; Nov. 4, 2016  - Updated to large model
 ; March 30 2012 - debuging... something strange is happening.
-;                 it looks as it code/data alignment is an issue
+;                 it looks as if code/data alignment is an issue
 ; March 17 1999 - Created
 ;
 ;=====================================================
@@ -33,16 +34,38 @@
 ; offsets into CB structure
 ;----------------------------------------
 ;
-nTid           equ      0
-nState         equ      2
-wTicks         equ      4
-wTicksLeft     equ      6
-task           equ      8
-wStackSize     equ      10
-pStackBase     equ      12
-pTopOfStack    equ      14
-pNextCb        equ      24
-dwTicksSuspend equ      28
+taskControlBlock_tag          STRUC
+nTid                DW      ?
+nState              DW      ?
+wTicks              DW      ?
+wTicksLeft          DW      ?
+task                DD      FAR PTR ?
+wStackSize          DW      ?
+pStackBase          DD      FAR PTR ?
+pTopOfStack         DD      FAR PTR ?
+nQin                DW      ?
+nQout               DW      ?
+nQsize              DW      ?
+pQbase              DD      FAR PTR ?
+pNextCb             DD      FAR PTR ?
+pPrevCb             DD      FAR PTR ?
+dwTicksSuspend      DD      ?
+nQusage             DW      ?
+nWaitType           DW      ?
+nMsgWait            DW      ?
+szTaskName          DB      9 DUP ( ? )
+taskControlBlock_tag          ENDS
+;
+;nTid           equ      0
+;nState         equ      2
+;wTicks         equ      4
+;wTicksLeft     equ      6
+;task           equ      8
+;wStackSize     equ      10
+;pStackBase     equ      12
+;pTopOfStack    equ      14
+;pNextCb        equ      24
+;dwTicksSuspend equ      28
 ;
 ;----------------------------------------
 ; task state

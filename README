@@ -5,3 +5,39 @@
 ******************************************************
 
 
+
+
+===========================================================
+ This section describes the build environment for 8bit x86
+===========================================================
+
+Write this and built the new environment around Eclipse after having many issues
+with a build environment based on Borland C IDE
+
+The requirements for this work are
+- installed Borland IDE with access to the command line tools bcc.exe tlink.exe ...
+- TASM command line for tasm.exe (and optional: h2ash.exe)
+- Eclipse IDE
+- DosBox for Linux
+- the set of scripts in this directory
+- Make utility
+
+in DosBox .config define the following mount points
+
+    [autoexec]
+    # Lines in this section will be run at startup.
+    # You can put your MOUNT lines here.
+    mount c ~/drive_c
+    mount l ~/Documents
+
+-----------------------------------------------------------
+ TASM
+-----------------------------------------------------------
+
+1. use this command line example to invoke TASM and save its output to a file:
+    dosbox -c "c:\\tasm\\bin\\tasm.exe l:\\webserve\\src\\_lmte.asm l:\\webserve\\bin\\_lmte.obj > l:\\webserve\\bin\\tasm.out" -c exit
+2. use awk script to parse output file and generate Eclipse output format for Eclipse event window
+3. package #1 and #2 in a shell script
+4. use shell script in #3 as the build command in the make file
+
+

@@ -25,7 +25,7 @@ Background information on SD serial interface:
  NEC v25 CPU board
 ======================================================
 
-1. Use serial interface 1 for console:
+1. Use serial interface num 1 for console:
     - change FlashLite BIOS behavior by hooking a replacement console BIOS INT 10?
     - will FlashLite XDOS support TSR functionality?
     - option to change consoles only for the running app?
@@ -53,13 +53,14 @@ Background information on SD serial interface:
                                10  n.c             -->  not connected
     
     - use both serial ports on PC and FlashLite to check proper communucation using a small loop back program for Ser Port 1
-        using the following setup directories for BC compiler:
-         z:\home\eyal\Documents\web-server\src
-         z:\home\eyal\Documents\web-server\src\include
-         z:\home\eyal\Documents\web-server\src\bin
+        using the following setup directories for BC compiler.
+        where WINE and DOSBOX define 'l:' as '~/Documents':
+         l:\webserve\src
+         l:\webserve\src\include
+         l:\webserve\bin
         ser1loop.c
 
-    {may abandon this option} writing a TSR fo v25 Flash Lite by testing TSR functionality with tsrtest.c
+    {abandoned this option} writing a TSR fo v25 Flash Lite by testing TSR functionality with tsrtest.c
     - use a simple TSR to hook into timer tickes and poll a byte that can be changes from a local Basic POKE command
       Flash Lite BIOS/DOS timer uses v25 timer-1 which is et up as follows:
         timer-1 control, tmc1: 0xc0   --> interval timer, with Fclk/128 = 78,125Hz
@@ -69,25 +70,27 @@ Background information on SD serial interface:
         timer-1 macro, tmms0: 0xe6, tmms1: 0x47, tmms2: 0x45
 
     use multi tasking executive used for my robot project - SMTE - as a basis for a solution that includes:
-    - console task, through serial-1 and a basic CLI list
-    - time task that keeps time of day and general system time tick
+    - t_term -- console task, through serial-1 and a basic CLI list
+    - t_time -- time task that keeps time of day and general system time tick
       for debug and potentially interface with NTP...
-    - web server task, maybe this can be used with more than one task copy to enable more than one concurrent connection? maybe add a feature to SMTE that allows dynamic addition and deletion of tasks?
-    - SD card interface task for IO to SD card
-    - LCD display task, matbe part of the console task?
-    - an IP stack task
+    - t_ws -- web server task, maybe this can be used with more than one task copy to enable more than one concurrent connection? maybe add a feature to SMTE that allows dynamic addition and deletion of tasks?
+    - t_sd -- SD card interface task for IO to SD card
+    - t_lcd -- LCD display task, matbe part of the console task?
+    - t_eth / t_slip -- an IP stack task. this will eventually interface to Etherner chip, but can use Serial-0 with SLIP (before adding SD card and LCD...)
 
-2. After above, use serial interface 0 as SPI
+2. After above, use serial interface num 0 as SPI
     - use this for LCD and SD Card (built into LCD)
     - need logic level interfacing 3.3v/5v
     - RxD0 = MISO, TxD0 = MOSI, ^SCK0 + ^CTS0 = SCLK
     - need a few of IO lines for Slave Select on v25 P.1
     - what are the usable clock rates?
+
 3. replace disk services INT 13 with something that can handle or replace B: with SD card "drive"
+
 4. AVR 328P+Ethernet --> v25 P.0, with either DMA or simple handshaking, both through v25 P.2
 
 ======================================================
- PC-XT, 8086 CPU board
+ PC-XT, 8086 CPU board option
 ======================================================
 
 1. Reuse PC-XT 8255 interface for SD card and Ethernet instead of IDE interface.
@@ -121,15 +124,42 @@ Ethernet interface
 Ethernet chip to AVR 328P that connects to a Mode 2 8255 port bank
 PA is IO, PC3..7 hand shake
 
+
+======================================================
+ Notes on memory models
+======================================================
+
+The memory models are (https://en.wikipedia.org/wiki/Intel_Memory_Model):
+
+Model 	Data 	Code 	Definition
+--------------------------------------------------------------------------------------
+Tiny* 	near 	near    CS=DS=SS, (COM) executable file format
+Small 	near** 	near 	DS=SS
+Medium 	near** 	far 	DS=SS, multiple code segments
+Compact far 	near 	single code segment, multiple data segments
+Large 	far 	far 	multiple code and data segments
+Huge 	huge 	far 	multiple code and data segments; single array may be >64 KB
+
+*   In the Tiny model, all four segment registers point to the same segment.
+**  In all models with near data pointers, SS equals DS.
+    Stack is always limited to at most 64 KByte.
+
+**************
+*** issues ***
+**************
+for FlashLite V25, code compiled with memory models Compact, Large or Hyge doe not run and cause memory isue for the board's XDOS..
+need to find out why models that use 'far' data pointed, i.e. DS .neq. SS fail
+- tried same code, ser1loop.c, compiled exe per memory model on BC5 IDE
+- 'ser1loop' compiles use make it binary identical to the one sompiled with the IDE
+- --> suspect timer clock tick interrupt that uses register bank switching?
+- --> try to change 'ser1loop.c' to disable timer clock tick ...
+- 
+
 ======================================================
  Notes on compiler
 ======================================================
 
-Will be using Borlan C 5 compiler and IDE installed through wine
-Optional to use the command line 'bcc.exe' and linker 'tlink.exe'
+Opted to use the command line 'tasm.exe', 'tlib.exe', 'bcc.exe' and linker 'tlink.exe'
 To run the command line versions and use Eclipse as IDE + a traditional Make file will require DOSbox as follows:
  dosbox -c bcc.exe <options> -c exit
-DOSbox configuration file would have this in the [autoexec] section
- mount d ~/drive_c/BC5/BIN
- d:
-
+Created 'traditional' make file and 'build.sh' script as a helper script to manage dosbox and 16-bit DOS tool
