@@ -59,21 +59,21 @@ nTid                DW      ?
 nState              DW      ?
 wTicks              DW      ?
 wTicksLeft          DW      ?
-task                DD      FAR PTR ?
+task                DD      ?
 wStackSize          DW      ?
-pStackBase          DD      FAR PTR ?
-pTopOfStack         DD      FAR PTR ?
+pStackBase          DD      ?
+pTopOfStack         DD      ?
 nQin                DW      ?
 nQout               DW      ?
 nQsize              DW      ?
-pQbase              DD      FAR PTR ?
-pNextCb             DD      FAR PTR ?
-pPrevCb             DD      FAR PTR ?
+pQbase              DD      ?
+pNextCb             DD      ?
+pPrevCb             DD      ?
 dwTicksSuspend      DD      ?
 nQusage             DW      ?
 nWaitType           DW      ?
 nMsgWait            DW      ?
-szTaskName          DB      9 DUP ( ? )
+szTaskName          DB      9 DUP (?)
 
 taskControlBlock_tag          ENDS
 

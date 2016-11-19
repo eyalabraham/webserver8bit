@@ -38,8 +38,6 @@
 #define Q_NOWAIT          0       // no-wait message, task suspended if 'dwTicksSuspend' != 0
 #define Q_WAIT            Q_NOWAIT + 1 // task suspended and waiting for message. see 'nMsgWait'
 
-#ifdef __V25__
-
 /* -----------------------------------------
    NEC V25 SBC
 ----------------------------------------- */
@@ -50,26 +48,6 @@
 #define TIMER_INT_MASK    0x07
 
 #define IRQ_VECT          28      /* timer0 interrupt vector          */
-
-#else
-
-/* -----------------------------------------
-   PC
------------------------------------------ */
-
-#define MILI_SEC          1190    /* timer setup for 1ms count
-                                     actually 1190.4762 for 1.19Mhz   */
-#define TIMER_CTL_REG     0x43
-#define TIMER_COUNT       0x40
-#define TIMER_CTL_WORD    0x34    /* clock0, LSB & MSB R/W, mode 2    */
-
-#define INT_MASK_REG      0x21    /* interrupt controler addresses    */
-#define INT_CMD_REG       0x20
-#define TIMER_IRQ_MASK    0xfc
-
-#define IRQ_VECT          0x08    /* clock 0 timer interrupt vector   */
-
-#endif
 
 /* -----------------------------------------
    internal types and enumerations

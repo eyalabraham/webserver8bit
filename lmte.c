@@ -10,25 +10,26 @@
 *************************************************************************** */
 
 #include <dos.h>
+#include <i86.h>
+#include <conio.h>
 #include <stdio.h>
 #include <string.h>
-#include <alloc.h>
+#include <malloc.h>
 
 #include "lmte.h"
 #include "internal.h"
 #include "v25.h"
 
-#pragma  intrinsic memcpy     /* compile memcpy() as inline */
-#pragma  intrinsic strcmp     /* compile strcmp() as inline */
+#pragma  intrinsic ( memcpy )		/* compile memcpy() as inline */
+#pragma  intrinsic ( strcmp )		/* compile strcmp() as inline */
 
 /* -----------------------------------------
    static function prototypes
 ----------------------------------------- */
 
-char   nibtohex(BYTE);
-struct taskControlBlock_tag* getCbByID(int);
-void   smteUtil(void);
-void   printSegments(void);
+static	char   nibtohex(BYTE);
+static	struct taskControlBlock_tag* getCbByID(int);
+static	void   smteUtil(void);
 
 /* -----------------------------------------
    local definitions
@@ -57,17 +58,12 @@ volatile struct taskControlBlock_tag*  pCurrentCb    = NULL;
 struct taskControlBlock_tag*  pCbListTop       = NULL;
 
 int                           nCritSecFlag     = 0;
-WORD                          wSaveStackPointer;
 WORD                          wOldVectorSeg;
 WORD                          wOldVectorOff;
 WORD                          wTimerService    = 0;
 int                           nTaskCount       = 0;
 WORD                          wMiliSecPerTick  = DEF_MSEC_PER_TICK;
-
-WORD                          wStackSeg;
-WORD                          wExtraSeg;
-WORD                          wDataSeg;
-WORD                          wCodeSeg;
+WORD					      __SP;
 
 /* message trace buffer
 */
@@ -82,6 +78,10 @@ WORD                          wTraceRecCount   = 0;
 struct dataLog_tag            dataLogBuffer[LOG_BUFFER_SIZE];
 int                           nDataLogCount    = 0;
 
+/* general purpose registers
+ */
+struct SREGS sregs;
+
 /* ---------------------------------------------------------
    isr()
 
@@ -89,7 +89,7 @@ int                           nDataLogCount    = 0;
    Invoked every clock tick and reschedules to a new
    ready (T_READY) task, or resumes the current task.
 --------------------------------------------------------- */
-extern void _far isr(void);
+extern void isr(void);
 
 /* ---------------------------------------------------------
    reschedule()
@@ -277,11 +277,11 @@ timer(void)
    interrupts.
 --------------------------------------------------------- */
 static void
-setisrvect(int            nVectId,
-           void (_far* fpIsrAdd) () )
+setisrvect(int  nVectId,
+           void (*fpIsrAdd) () )
          /*  void interrupt fpIsrAdd () ) */
 {
- WORD _far* wpVector;
+ WORD* wpVector;
 
  wpVector      = MK_FP(0, (nVectId * 4));
 
@@ -302,17 +302,14 @@ setisrvect(int            nVectId,
 static void
 setupTimer(WORD wMiliSecInterval)
 {
- WORD              wCount;
-
- #ifdef __V25__
- struct SFR _far*  pSfr;
- #endif
+ WORD	wCount;
+ struct SFR*  pSfr;
 
  /* -----------------------------------------
     setup clock timer channel 0
  ----------------------------------------- */
 
- asm { cli }
+ _disable();
 
  /* -----------------------------------------
     setup interrupt vector
@@ -321,12 +318,10 @@ setupTimer(WORD wMiliSecInterval)
  setisrvect(IRQ_VECT, isr);
  
  /* -----------------------------------------
-    setup interrupt controler and timer
+    setup interrupt controller and timer
  ----------------------------------------- */
 
  wCount = ( (wMiliSecInterval > 50) ? 50 : wMiliSecInterval ) * MILI_SEC;
-
- #ifdef __V25__
 
  pSfr = MK_FP(0xf000, 0xff00);
 
@@ -334,60 +329,7 @@ setupTimer(WORD wMiliSecInterval)
  pSfr->md0    = wCount;
  pSfr->tmic0 &= TIMER_INT_MASK;          /* timer0/int0 vector int.     */
  pSfr->tmc0   = TIMER_CTL_WORD;          /* start timer                 */
-
- #else
-
- outp(TIMER_CTL_REG, TIMER_CTL_WORD);
- outp(TIMER_COUNT, LO(wCount));
- outp(TIMER_COUNT, HI(wCount));
-
- outp(INT_MASK_REG, TIMER_IRQ_MASK);
-
- #endif
 }
-
-/* ---------------------------------------------------------
-   escape()
-
-   rerurn control to calling control program, effectivly
-   exiting the scheduler.
-   The function performs task clean up and returns from
-   after the 'iret' point in startScheduler().
-
-   NOTE: The function assumes that no malloc()'s where done
-         inside a task, these will NOT be free()'d!
----------------------------------------------------------
-static void
-escape(void)
-{
- asm { cli }
-
- stop timer
-
- #ifdef __V25__
-
- #else
-
- #endif
-
- restore original timer interrupt handler
-
- setisrvect(IRQ_VECT, (void (_far*) ()) MK_FP(wOldVectorSeg, wOldVectorOff));
-
- restore original stack pointer
-
- _SP = wSaveStackPointer;
-
- for every task: remove queue, local stack, CB
-
- exit code
-
- asm { sti             re-enable interrupts, and...
-       pop si          restore si register
-       mov sp,bp       get rid of 'szHex'
-       pop bp    };    fake startScheduler()' exit code
-}
-*/
 
 /* ---------------------------------------------------------
    registerTask()
@@ -501,7 +443,8 @@ registerTask(void   (* func)(void),    /* pointer to task               */
 
  *(--pNewCbNode->pTopOfStack) = 0xf202;       /* setup fake flags w/ IF true */
 
- *(--pNewCbNode->pTopOfStack) = _CS;          /* get code segment            */
+ segread(&sregs);
+ *(--pNewCbNode->pTopOfStack) = sregs.cs;	  /* get code segment            */
 
  *(--pNewCbNode->pTopOfStack) = (WORD) pNewCbNode->task; /* get task address */
 
@@ -561,7 +504,7 @@ startScheduler(enum tag_traceLevel traceLvl,
                WORD wTimerFlag,
                WORD wPerTick)
 {
- asm { cli }
+ _disable();
 
  if ( nTaskCount == 0 )
     {
@@ -612,44 +555,24 @@ startScheduler(enum tag_traceLevel traceLvl,
  printf("INFO: startScheduler() - TIMER(%d)\n", wTimerService);
 
  /* -----------------------------------------
-    print segments register values
- ----------------------------------------- */
-
- wStackSeg = _SS;
- wExtraSeg = _ES;
- wDataSeg  = _DS;
- wCodeSeg  = _CS;
-
- printf("INFO: startScheduler() - CS=0x%04x DS=0x%04x\n", wCodeSeg, wDataSeg);
- printf("INFO: startScheduler() - SS=0x%04x ES=0x%04x\n", wStackSeg, wExtraSeg);
-
- /* -----------------------------------------
     start executive
  ----------------------------------------- */
 
  printf("INFO: startScheduler() - mSec/tick = %02x\n", wMiliSecPerTick);
 
- pCurrentCb = pCbListTop;              /* point to first task           */
+ pCurrentCb = pCbListTop;               /* point to first task           */
 
- wSaveStackPointer = _SP;              /* save original stack pointer   */
- pCurrentCb->pTopOfStack += ISR_FRAME; /* get rid of fake 'push'ed regs */
+ pCurrentCb->pTopOfStack += ISR_FRAME;  /* get rid of fake 'push'ed regs */
 
- setupTimer(wMiliSecPerTick);          /* setup timer interrupt         */
+ setupTimer(wMiliSecPerTick);           /* setup timer interrupt         */
 
- _SP = (WORD) pCurrentCb->pTopOfStack; /* swap to task's stack          */
+ __SP = (WORD) pCurrentCb->pTopOfStack;
 
- #ifdef __V25__
- asm {
-      sti
-      iret                             // a 'fake' iret into task
-     }
- #else
- asm {
-      out 020H, 020H
-      sti                              /* re-enable interrupts          */
-      iret                             /* fake an interrupt return      */
-     }
- #endif
+ __asm {
+	 	 mov sp,__SP                    /* swap to task's stack          */
+         sti
+         iret                           /*  a 'fake' iret into task      */
+       };
 }
 
 /* ---------------------------------------------------------

@@ -11,7 +11,8 @@
 ;
 ;=====================================================
 ;
-            .MODEL     SMALL
+            .8086
+            .model     large
 ;
 ;----------------------------------------
 ; external variables
@@ -22,13 +23,8 @@
             extrn      _pCbListTop    : word
             extrn      _nCritSecFlag  : word
 ;
-            extrn      _wStackSeg     : word
-            extrn      _wExtraSeg     : word
-            extrn      _wDataSeg      : word
-            extrn      _wCodeSeg      : word
-;
-            extrn      _setCSflag     : proc
-            extrn      _clearCSflag   : proc
+            extrn      setCSflag_     : proc far
+            extrn      clearCSflag_   : proc far
 ;
 ;----------------------------------------
 ; offsets into CB structure
@@ -39,21 +35,21 @@ nTid                DW      ?
 nState              DW      ?
 wTicks              DW      ?
 wTicksLeft          DW      ?
-task                DD      FAR PTR ?
+task                DD      ?
 wStackSize          DW      ?
-pStackBase          DD      FAR PTR ?
-pTopOfStack         DD      FAR PTR ?
+pStackBase          DD      ?
+pTopOfStack         DD      ?
 nQin                DW      ?
 nQout               DW      ?
 nQsize              DW      ?
-pQbase              DD      FAR PTR ?
-pNextCb             DD      FAR PTR ?
-pPrevCb             DD      FAR PTR ?
+pQbase              DD      ?
+pNextCb             DD      ?
+pPrevCb             DD      ?
 dwTicksSuspend      DD      ?
 nQusage             DW      ?
 nWaitType           DW      ?
 nMsgWait            DW      ?
-szTaskName          DB      9 DUP ( ? )
+szTaskName          DB      9 DUP (?)
 taskControlBlock_tag          ENDS
 ;
 ;nTid           equ      0
@@ -109,10 +105,10 @@ FINT        macro
 ;
 ;
             .CODE
-            assume  cs:_TEXT,ds:DGROUP
+;            assume  cs:_TEXT,ds:DGROUP
 ;
 ;=====================================================
-;  _isr()
+;  isr_()
 ;
 ;  Interrupt service routine.
 ;  Invoked every clock tick and reschedules
@@ -120,9 +116,9 @@ FINT        macro
 ;  the current task.
 ;=====================================================
 ;
-            public     _isr
+            public     isr_
 ;
-_isr        proc       far
+isr_        proc       far
 ;
             push       ax
             push       si
@@ -224,11 +220,11 @@ NO_SWITCH:
             FINT
             iret
 ;
-_isr        endp
+isr_        endp
 ;
 ;
 ;=====================================================
-;  reschedule()
+;  reschedule_()
 ;
 ;  Entered when a task is done (performes a 'ret').
 ;  The function re-establishes the a fake stack frame
@@ -238,9 +234,9 @@ _isr        endp
 ;  (T_READY state) task and 'iret's to start it.
 ;=====================================================
 ;
-            public     _reschedule
+            public     reschedule_
 ;
-_reschedule proc       near
+reschedule_ proc       far
 ;
             cli                                           ; disable interrupts
 ;
@@ -255,7 +251,7 @@ _reschedule proc       near
 ; a return address to the rescheduler
 ;----------------------------------------
 ;
-            mov        ax, offset _reschedule
+            mov        ax, offset reschedule_
             push       ax
 ;
 ;----------------------------------------
@@ -357,7 +353,7 @@ FIND_RDY_TASK:
             sti                                           ; reenable interrupts
             iret
 ;
-_reschedule endp
+reschedule_ endp
 ;
 ;
 ;=====================================================
@@ -371,9 +367,9 @@ _reschedule endp
 ;     This function is only called from suspend()
 ;=====================================================
 ;
-            public     _block
+            public     block_
 ;
-_block      proc       near
+block_      proc       far
 ;
             cli                                           ; disable interrupts
 ;
@@ -424,19 +420,19 @@ _block      proc       near
             mov        si, word ptr _pCurrentCb
             jmp        short RESCHEDULE
 ;
-_block      endp
+block_      endp
 ;
 ;=====================================================
-;  print()
+;  print_()
 ;
 ;  customized printing of ASCII string to 'stdout'.
 ;  string to be printed must be null terminated,
 ;  and passed as a pointer on the stack.
 ;=====================================================
 ;
-            public     _print
+            public     print_
 ;
-_print      proc       near
+print_      proc       far
 ;
             push       bp
             mov        bp,sp
@@ -449,13 +445,13 @@ _print      proc       near
             mov        es, bx
             mov        bx, 0ff00h
 ;
-            call       near ptr _setCSflag                ; enter critical section, to prevent task switch.
+            call       setCSflag_                         ; enter critical section, to prevent task switch.
             mov        si, word ptr [bp+4]                ; get pointer to string
 
 NXTC:
             mov        al, byte ptr [si]                  ; get character from string
             cmp        al, 0                              ; '0' char is end of string?
-            je	        short EXIT                         ; exit if end of string.
+            je	       short EXIT                         ; exit if end of string.
 ;
             mov        byte ptr es:[bx+TXB0], al          ; send byte to TxR reg.
 TX_NOT_RDY:
@@ -466,27 +462,27 @@ TX_NOT_RDY:
             inc        si                                 ; next character.
             jmp        short NXTC
 EXIT:
-            call       near ptr _clearCSflag              ; exit critical section.
+            call       clearCSflag_                       ; exit critical section.
 ;
             pop        es
             pop        bx
             pop        si
             pop        bp
 ;
-            ret
+            retf
 ;
-_print      endp
+print_      endp
 ;
 ;=====================================================
-;  _sendn()
+;  sendn_()
 ;
 ;  customized printing of ASCII string to 'stdout'.
 ;  use printn() to send 'n' bytes to serial console.
 ;=====================================================
 ;
-            public     _sendn
+            public     sendn
 ;
-_sendn      proc       near
+sendn_      proc       far
 ;
             push       bp
             mov        bp,sp
@@ -500,7 +496,7 @@ _sendn      proc       near
             mov        es, bx
             mov        bx, 0ff00h
 ;
-            call       near ptr _setCSflag                ; enter critical section, to prevent task switch
+            call       setCSflag_                         ; enter critical section, to prevent task switch
 ;
             mov        si, word ptr [bp+4]                ; get pointer to bytes
             mov        cx, word ptr [bp+6]                ; get byte count
@@ -520,7 +516,7 @@ WAIT_TX_RDY:
             dec        cx
             jnz        short NXT_BYTE
 EXIT_SENDN:
-            call       near ptr _clearCSflag              ; exit critical section.
+            call       clearCSflag_                       ; exit critical section.
 ;
             pop        es
             pop        cx
@@ -528,9 +524,9 @@ EXIT_SENDN:
             pop        si
             pop        bp
 ;
-            ret
+            retf
 ;
-_sendn      endp
+sendn_      endp
 ;
             end
 

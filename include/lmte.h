@@ -12,10 +12,7 @@
 #ifndef __LMTE_H__
 #define __LMTE_H__
 
-
-#ifdef __V25__
-  #pragma message "**** V25 object code! ****"
-#endif
+#pragma message ("  **** V25 object code! ****")
 
 #include    "internal.h"                /* for basic types */
 
@@ -28,7 +25,7 @@ typedef enum tag_traceLevel
               __TRC_LVL0__ = 0,          /* no trace information             */
               __TRC_LVL1__,              /* trace DB_BAD_xxx debug messages  */
               __TRC_LVL2__,              /* trace inter-task messages        */
-              __TRC_LVL3__               /* trace DB_INFO mesages            */
+              __TRC_LVL3__               /* trace DB_INFO messages            */
              };
 
 /* -----------------------------------------
@@ -64,8 +61,8 @@ registerTask(void   (* func)(void),      /* pointer to task                  */
              char*  szTaskName);         /* task name string                 */
 
 void
-startScheduler(enum tag_traceLevel traceLvl,   // trace sevices level
-               WORD                wTimerFlag, // '1' to register timer sevices
+startScheduler(enum tag_traceLevel traceLvl,   // trace service level
+               WORD                wTimerFlag, // '1' to register timer services
                WORD                wPerTick);  // mili-sec per timer tick
                                                // '0' = DEF_MSEC_PER_TICK (5)
 
@@ -78,7 +75,7 @@ getNameByTid(int     nTid,               /* task ID to search for            */
              int     nNameLen);          /* task name buffer size            */
 
 void
-suspend(WORD  wTime);                    /* suspened time in mili-seconds    */
+suspend(WORD  wTime);                    /* suspend time in mili-seconds    */
 
 int
 release(int  nTid);                      /* task ID to release               */

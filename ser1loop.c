@@ -14,7 +14,7 @@
 #include    <string.h>
 #include    <assert.h>
 #include    <dos.h>
-#include    <v25.h>
+#include    "v25.h"
 
 /* -----------------------------------------
    global definitions
@@ -32,10 +32,10 @@
 
 int main(int argc, char* argv[])
 {
-    struct SFR _far*    pSfr;           // pointer to NEC v25 IO register set
-    //struct SFR*		    pSfr;           // pointer to NEC v25 IO register set
+    //struct SFR _far*    pSfr;           // pointer to NEC v25 IO register set
+    struct SFR*		    pSfr;           // pointer to NEC v25 IO register set
     short int           bInByte;        // input byte to echo
-    struct time         sysTime;        // hold system time for timeout calculations
+    struct dostime_t    sysTime;        // hold system time for timeout calculations
     int                 nTimeofDay = 0; // time of day in seconds
     int                 nTimeOut;
     int                 i;
@@ -68,13 +68,13 @@ int main(int argc, char* argv[])
     // loop back up to LOOPCNT characters then exit
     for ( i = 0; i < LOOPCNT; i++ )
     {
-        gettime(&sysTime);                      // setup time stamp for timeout measurmanets
-        nTimeofDay = sysTime.ti_sec + sysTime.ti_min * 60 + sysTime.ti_hour * 360;
+        _dos_gettime(&sysTime);                      // setup time stamp for timeout measurmanets
+        nTimeofDay = sysTime.second + sysTime.minute * 60 + sysTime.hour * 360;
         nTimeOut = nTimeofDay + COMMTOUT;
         while ( (pSfr->scs1 & 0x10) == 0 )       // wait for character to be received
         {
-            gettime(&sysTime);
-            nTimeofDay = sysTime.ti_sec + sysTime.ti_min * 60 + sysTime.ti_hour * 360;
+            _dos_gettime(&sysTime);
+            nTimeofDay = sysTime.second + sysTime.minute * 60 + sysTime.hour * 360;
             if ( nTimeofDay > nTimeOut )
             {
                 printf("time-out waiting for serial input\n");
@@ -85,13 +85,13 @@ int main(int argc, char* argv[])
         bInByte = pSfr->rxb1;                   // read input character
         printf("received byte 0x%x (count %d)\n", bInByte, i);
 
-        gettime(&sysTime);                      // setup time stamp for timeout measurmanets
-        nTimeofDay = sysTime.ti_sec + sysTime.ti_min * 60 + sysTime.ti_hour * 360;
+        _dos_gettime(&sysTime);                      // setup time stamp for timeout measurmanets
+        nTimeofDay = sysTime.second + sysTime.minute * 60 + sysTime.hour * 360;
         nTimeOut = nTimeofDay + COMMTOUT;
         while ( (pSfr->scs1 & 0x20) == 0 )      // wait for TX completion
         {
-            gettime(&sysTime);
-            nTimeofDay = sysTime.ti_sec + sysTime.ti_min * 60 + sysTime.ti_hour * 360;
+            _dos_gettime(&sysTime);
+            nTimeofDay = sysTime.second + sysTime.minute * 60 + sysTime.hour * 360;
             if ( nTimeofDay > nTimeOut )
             {
                 printf("time-out waiting for serial output\n");

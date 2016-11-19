@@ -52,7 +52,7 @@ Background information on SD serial interface:
                                 9  GND             -->  5  GND
                                10  n.c             -->  not connected
     
-    - use both serial ports on PC and FlashLite to check proper communucation using a small loop back program for Ser Port 1
+    - use both serial ports on PC and FlashLite to check proper communication using a small loop back program for Ser Port 1
         using the following setup directories for BC compiler.
         where WINE and DOSBOX define 'l:' as '~/Documents':
          l:\webserve\src
@@ -60,7 +60,7 @@ Background information on SD serial interface:
          l:\webserve\bin
         ser1loop.c
 
-    {abandoned this option} writing a TSR fo v25 Flash Lite by testing TSR functionality with tsrtest.c
+    {abandoned this option} writing a TSR for v25 Flash Lite by testing TSR functionality with tsrtest.c
     - use a simple TSR to hook into timer tickes and poll a byte that can be changes from a local Basic POKE command
       Flash Lite BIOS/DOS timer uses v25 timer-1 which is et up as follows:
         timer-1 control, tmc1: 0xc0   --> interval timer, with Fclk/128 = 78,125Hz
@@ -147,19 +147,45 @@ Huge 	huge 	far 	multiple code and data segments; single array may be >64 KB
 **************
 *** issues ***
 **************
-for FlashLite V25, code compiled with memory models Compact, Large or Hyge doe not run and cause memory isue for the board's XDOS..
-need to find out why models that use 'far' data pointed, i.e. DS .neq. SS fail
+for FlashLite V25, code compiled with memory models Compact, Large or Huge do not run and cause memory issues for the board's XDOS..
+need to find out why models that use 'far' data pointers, i.e. DS .neq. SS fail
 - tried same code, ser1loop.c, compiled exe per memory model on BC5 IDE
-- 'ser1loop' compiles use make it binary identical to the one sompiled with the IDE
-- --> suspect timer clock tick interrupt that uses register bank switching?
-- --> try to change 'ser1loop.c' to disable timer clock tick ...
-- 
+- 'ser1loop' compiles use make it binary identical to the one compiled with the IDE
+- suspect timer clock tick interrupt that uses register bank switching:
+    disabled timer ticks with basic code and in 'c' code with no change
+- never fugured out what happened here, no response from JK Micro either.
+  changing over to the Watcom toolchain solved the problem!
 
 ======================================================
- Notes on compiler
+ Notes on Borlan C 5.x toolchain/compiler
 ======================================================
+
+Ultimately abandoned this method and moved to using Watcom C toolchain instead of Borland
+- Watcom is more flexible with its options
+- better suited for running in a Linux hosted cross compile environement
+- produced reliable code that ran in all memory models...
 
 Opted to use the command line 'tasm.exe', 'tlib.exe', 'bcc.exe' and linker 'tlink.exe'
-To run the command line versions and use Eclipse as IDE + a traditional Make file will require DOSbox as follows:
+to run the command line versions and use Eclipse as IDE + a traditional Make file will require DOSbox as follows:
  dosbox -c bcc.exe <options> -c exit
-Created 'traditional' make file and 'build.sh' script as a helper script to manage dosbox and 16-bit DOS tool
+created 'traditional' make file and 'build.sh' script as a helper script to manage dosbox and 16-bit DOS tool
+built a new environment around Eclipse after having many issues
+with the build environment based on Borland C IDE
+
+The requirements for this to work are
+- installed Borland IDE and TASM with access to the command line tools bcc.exe tlink.exe tasm.exe tlib.exe
+- Eclipse IDE
+- DosBox for Linux
+- a set of scripts in this directory
+- Make utility
+- created a 'build.sh' shell script to interface with DosBox and the 16-bit Borland utilities
+
+in DosBox .config define the following mount points
+
+    [autoexec]
+    # Lines in this section will be run at startup.
+    # You can put your MOUNT lines here.
+    mount c ~/drive_c
+    mount l ~/Documents
+
+
