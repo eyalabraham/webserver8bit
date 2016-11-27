@@ -4,6 +4,9 @@
 
   8-bit web server main module
   initializes hardware, registers tasks and starts web server
+
+  ws [-v] [-d <debug level: 0..3>]
+
   running tasks under LMTE:
   -
 
@@ -11,7 +14,7 @@
 
 *************************************************************************** */
 
-#include    <dos.h>
+//#include    <dos.h>
 #include    <stdio.h>
 #include    <stdlib.h>
 #include    <string.h>
@@ -20,7 +23,8 @@
 #include    "lmte.h"
 #include    "names.h"
 
-//#include    "t_term.h"
+#include    "t_term.h"
+#include	"t_dummy.h"
 
 /* -----------------------------------------
    globals
@@ -36,8 +40,9 @@ int main(int argc, char* argv[])
     int  i;
 
     // parse command line parameters:
-    // ws [-v]
-    //         '-v' print build and verion information
+    // ws [-v] [-d <debug level>]
+    //         '-v' print build and version information
+    //         '-d' debug level 0..3
     for ( i = 1; i < argc; i++ )
     {
         if ( strcmp(argv[i], "-v") == 0 )
@@ -54,6 +59,15 @@ int main(int argc, char* argv[])
 
     // build date
     printf("BUILD: ws.exe %s %s\n", __DATE__, __TIME__);
+
+    /* tasks:           task        stack ticks    msg  name                  */
+    assert(registerTask(t_term,       64,    1,     1,  TASK_NAME_TERM));
+    assert(registerTask(t_dummy,      64,    1,     1,  TASK_NAME_DUMMY));
+
+    // ***  add 5 mili sec for lmte utility task  ***
+
+    // start scheduler
+    startScheduler(__TRC_LVL3__, __TIMER_OFF__, 1);
 
     return 0;
 }

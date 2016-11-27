@@ -2,7 +2,7 @@
 
   LMTE.C
 
-  Large (model) Multi Task Executive (LMTE) library source code.
+  Large (memory model) Multi Task Executive (LMTE) library source code.
 
   Nov. 4, 2016  - Updated to large model
   March 17 1999 - Created
@@ -29,7 +29,7 @@
 
 static	char   nibtohex(BYTE);
 static	struct taskControlBlock_tag* getCbByID(int);
-static	void   smteUtil(void);
+static	void   idle(void);
 
 /* -----------------------------------------
    local definitions
@@ -63,7 +63,8 @@ WORD                          wOldVectorOff;
 WORD                          wTimerService    = 0;
 int                           nTaskCount       = 0;
 WORD                          wMiliSecPerTick  = DEF_MSEC_PER_TICK;
-WORD					      __SP;
+WORD                          __SS;
+WORD                          __SP;
 
 /* message trace buffer
 */
@@ -95,7 +96,7 @@ extern void isr(void);
    reschedule()
 
    This function is reached when a task is done and
-   performes a normal 'ret'.
+   performs a normal 'ret'.
    The function re-establishes the task's fake stack frame
    (pushing its own address and a fake interrupt frame
     with the tasks own return address).
@@ -130,13 +131,12 @@ extern void print(char* szStr);
    setCSflag()
 
    This function sets the critical section flag.
-   The flag should be set to start a critical code section,
+   The flag should be set to enter a critical code section,
    in which task switching is inhibited.
 --------------------------------------------------------- */
-void
-setCSflag(void)
+void setCSflag(void)
 {
- nCritSecFlag = 1;
+    nCritSecFlag = 1;
 }
 
 /* ---------------------------------------------------------
@@ -145,10 +145,9 @@ setCSflag(void)
    This function clears the critical section flag, and
    reenables task switching.
 --------------------------------------------------------- */
-void
-clearCSflag(void)
+void clearCSflag(void)
 {
- nCritSecFlag = 0;
+    nCritSecFlag = 0;
 }
 
 /* ---------------------------------------------------------
@@ -156,10 +155,9 @@ clearCSflag(void)
 
    convert a nibble to single hex digit
 --------------------------------------------------------- */
-static char
-nibtohex(BYTE  bNibble)
+static char nibtohex(BYTE  bNibble)
 {
- return ( (bNibble > 9) ? (bNibble - 0x0a + 'a') : (bNibble + '0'));
+    return ( (bNibble > 9) ? (bNibble - 0x0a + 'a') : (bNibble + '0'));
 }
 
 /* ---------------------------------------------------------
@@ -168,10 +166,9 @@ nibtohex(BYTE  bNibble)
    convert to hex.
    return pointer to string, or NULL if error
 --------------------------------------------------------- */
-char*
-tohex(DWORD   dwNum,
-      char*   szHex,
-      int     nSize)
+char* tohex(DWORD   dwNum,
+            char*   szHex,
+            int     nSize)
 {
  register int   i;
 
@@ -195,14 +192,13 @@ tohex(DWORD   dwNum,
    idle task.
    SMTE 'house keeping' and idle wait, never suspended.
 --------------------------------------------------------- */
-static void
-smteUtil(void)
+static void idle(void)
 {
  register struct taskControlBlock_tag* pCb;
  register struct traceRecord_tag*      pTraceRecord;
  char                                  szHex[10];
 
- //print("smteUtil\r\n");
+ //print("idle\r\n");
 
  // find suspended tasks and process suspend time
  pCb = pCbListTop;
@@ -261,49 +257,24 @@ smteUtil(void)
 
    timer service task.
 --------------------------------------------------------- */
-static void
-timer(void)
+/*
+static void timer(void)
 {
 }
-
-/* ---------------------------------------------------------
-   setisrvect()
-
-   This function will set interrupt vector nVectId,
-   to point to function fpIsrAdd.
-   the original code for setvect() enables interrupts
-   within the int 21H call.
-   setisrvect() will do the same without re-enabling
-   interrupts.
---------------------------------------------------------- */
-static void
-setisrvect(int  nVectId,
-           void (*fpIsrAdd) () )
-         /*  void interrupt fpIsrAdd () ) */
-{
- WORD* wpVector;
-
- wpVector      = MK_FP(0, (nVectId * 4));
-
- wOldVectorOff = *wpVector;
- *wpVector++   = FP_OFF(fpIsrAdd);
-
- wOldVectorSeg = *wpVector;
- *wpVector     = FP_SEG(fpIsrAdd);
-}
+*/
 
 /* ---------------------------------------------------------
    setupTimer()
 
-   This function sets up the timer and inrerrupt vectors.
+   This function sets up the timer and interrupt vectors.
    The timer is set to interrupt every 'wMiliSecInterval'
-   miliseconds.
+   mili-seconds.
 --------------------------------------------------------- */
-static void
-setupTimer(WORD wMiliSecInterval)
+static void setupTimer(WORD wMiliSecInterval)
 {
- WORD	wCount;
+ WORD	      wCount;
  struct SFR*  pSfr;
+ WORD*        wpVector;
 
  /* -----------------------------------------
     setup clock timer channel 0
@@ -315,7 +286,9 @@ setupTimer(WORD wMiliSecInterval)
     setup interrupt vector
  ----------------------------------------- */
 
- setisrvect(IRQ_VECT, isr);
+ wpVector      = MK_FP(0, (IRQ_VECT * 4));
+ *wpVector++   = FP_OFF(isr);
+ *wpVector     = FP_SEG(isr);
  
  /* -----------------------------------------
     setup interrupt controller and timer
@@ -339,12 +312,11 @@ setupTimer(WORD wMiliSecInterval)
    The function returns a valid task ID,
    or '0' for failure
 --------------------------------------------------------- */
-int
-registerTask(void   (* func)(void),    /* pointer to task               */
-             WORD   wStackSize,        /* task stack size '0' = default */
-             WORD   wTicks,            /* task tick count '0' = default */
-             int    nMsgQsize,         /* message Q size  '0' = default */
-             char*  szTaskName)        /* task name string              */
+int registerTask(void   (* func)(void),    /* pointer to task               */
+                 WORD   wStackSize,        /* task stack size '0' = default */
+                 WORD   wTicks,            /* task tick count '0' = default */
+                 int    nMsgQsize,         /* message Q size  '0' = default */
+                 char*  szTaskName)        /* task name string              */
 {
  static struct taskControlBlock_tag* pCbList = NULL;
 
@@ -357,14 +329,16 @@ registerTask(void   (* func)(void),    /* pointer to task               */
  if ( nTaskCount == MAX_TASKS_EVER )
     return 0;
 
+ printf("INFO: registering task (%s)\n", szTaskName);
+
  /* -----------------------------------------
     allocate task's CB on near heap
  ----------------------------------------- */
 
- pNewCbNode = malloc(sizeof(struct taskControlBlock_tag));
+ pNewCbNode = _nmalloc(sizeof(struct taskControlBlock_tag));		// try to allocate TCB in the DGROUP segment
  if ( pNewCbNode == NULL )
     {
-     printf("ERR: registerTask() - CB malloc() for %s\n", szTaskName);
+     printf("  failed TCB malloc()\n");
      return 0;
     }
 
@@ -380,7 +354,7 @@ registerTask(void   (* func)(void),    /* pointer to task               */
  pNewCbNode->nWaitType  = Q_NOWAIT;
  pNewCbNode->nMsgWait   = __ANY__;
 
- printf("INFO: registerTask() - task entry point 0x%x\n", (WORD) func);
+ printf("  task entry point 0x%x:0x%x\n", (WORD) FP_SEG(func),(WORD) FP_OFF(func));
 
  /* -----------------------------------------
     allocate task's message Q on near heap
@@ -388,10 +362,10 @@ registerTask(void   (* func)(void),    /* pointer to task               */
 
  nQsize = nMsgQsize ? nMsgQsize : DEF_MSGQ_SIZE;
 
- pNewMsgQ = malloc(nQsize * sizeof(struct message_tag));
+ pNewMsgQ = _nmalloc(nQsize * sizeof(struct message_tag));			// try to allocate a message queue in the DGROUP segment
  if ( pNewMsgQ == NULL )
     {
-     printf("ERR: registerTask() - message Q malloc() for %s\n", szTaskName);
+     printf("  failed message Q malloc()\n");
      free(pNewCbNode);
      return 0;
     }
@@ -403,7 +377,7 @@ registerTask(void   (* func)(void),    /* pointer to task               */
  pNewCbNode->nQusage = 0;
  pNewCbNode->pQbase  = pNewMsgQ;
 
- printf("INFO: registerTask() - msg queue base 0x%x\n", (WORD) pNewCbNode->pQbase);
+ printf("  message queue allocated, slot count %d\n", nQsize);
 
  /* -----------------------------------------
     allocate task's stack on near heap
@@ -411,11 +385,11 @@ registerTask(void   (* func)(void),    /* pointer to task               */
           stack size is in WORDs
  ----------------------------------------- */
 
- wStack = wStackSize ? wStackSize : DEF_STACK_SIZE;
+ wStack = wStackSize ? wStackSize : DEF_STACK_SIZE;					// allocate stack from far heap
  pNewStack = malloc(2 * wStack);
  if ( pNewStack == NULL )
     {
-     printf("ERR: registerTask() - stack malloc() for %s\n", szTaskName);
+     printf("  failed stack malloc()\n");
      free(pNewMsgQ);
      free(pNewCbNode);
      return 0;
@@ -426,30 +400,31 @@ registerTask(void   (* func)(void),    /* pointer to task               */
  pNewCbNode->pStackBase  = pNewStack;
  pNewCbNode->pTopOfStack = pNewStack + wStack - 1;
 
- printf("INFO: registerTask() - stack base:0x%x top:0x%x\n", (WORD) pNewCbNode->pStackBase, (WORD) pNewCbNode->pTopOfStack);
+ printf("  stack allocated\n");
 
  /* -----------------------------------------
     create a fake stack frame
     at startup task has an interrupt frame
     to start itself upon 'iret', and a
-    short return frame into reschedule()
+    *far* return frame into reschedule()
  ----------------------------------------- */
 
- /* a return address to the rescheduler        */
+ // save far call return frame for reschedule()
 
- *(--pNewCbNode->pTopOfStack) = (WORD) reschedule;
+ *(--pNewCbNode->pTopOfStack) = (WORD) FP_SEG(reschedule);			// get reschedule() code segment and offset
+
+ *(--pNewCbNode->pTopOfStack) = (WORD) FP_OFF(reschedule);
 
  /* an interrupt frame for a scheduler startup */
 
- *(--pNewCbNode->pTopOfStack) = 0xf202;       /* setup fake flags w/ IF true */
+ *(--pNewCbNode->pTopOfStack) = 0xf202;								// setup fake flags w/ IF true
 
- segread(&sregs);
- *(--pNewCbNode->pTopOfStack) = sregs.cs;	  /* get code segment            */
+ *(--pNewCbNode->pTopOfStack) = (WORD) FP_SEG(pNewCbNode->task);	// get task's code segment
 
- *(--pNewCbNode->pTopOfStack) = (WORD) pNewCbNode->task; /* get task address */
+ *(--pNewCbNode->pTopOfStack) = (WORD) FP_OFF(pNewCbNode->task);	// get task's offset
 
- pNewCbNode->pTopOfStack -= ISR_FRAME;       /* fake 'push' of ax,si,bx,cx,
-                                                dx,di,es,bp                  */
+ pNewCbNode->pTopOfStack -= ISR_FRAME;       						// fake 'push' of ax,si,bx,cx,dx,di,es,bp
+
  /* -----------------------------------------
     chain task CB into CB list
  ----------------------------------------- */
@@ -479,9 +454,7 @@ registerTask(void   (* func)(void),    /* pointer to task               */
      pCbList             = pNewCbNode;
     }
 
- printf("INFO: registerTask() - name = %s tid = %02x\n", pNewCbNode->szTaskName, pNewCbNode->nTid);
-
- printf("INFO: registerTask() - task cb 0x%x\n", (WORD) pNewCbNode);
+ printf("  registered task = %s tid = %02x\n", pNewCbNode->szTaskName, pNewCbNode->nTid);
 
  nTaskCount++;
 
@@ -495,20 +468,21 @@ registerTask(void   (* func)(void),    /* pointer to task               */
    The function will return only if no tasks are present
    in the task list.
    If at least one task is resent in the task list the function
-   will setup the schduling timer and start task scheduling.
+   will setup the scheduling timer and start task scheduling.
 
-   This function never ruturns.
+   This function never returns.
 --------------------------------------------------------- */
-void
-startScheduler(enum tag_traceLevel traceLvl,
-               WORD wTimerFlag,
-               WORD wPerTick)
+void startScheduler(enum tag_traceLevel traceLvl,
+                    WORD                wTimerFlag,
+                    WORD                wPerTick)
 {
  _disable();
 
+ printf("INFO: starting scheduler\n");
+
  if ( nTaskCount == 0 )
     {
-     printf("INFO: startScheduler() - task queue empty\n");
+     printf("  task queue empty. exiting\n");
      return;
     }
 
@@ -523,21 +497,21 @@ startScheduler(enum tag_traceLevel traceLvl,
  if ( traceLevel > __TRC_LVL0__ )
     {
      /* allocate trace buffer */
-     pTraceBuffer = malloc(MAX_TRACE_BUFFER * sizeof(struct traceRecord_tag));
+     pTraceBuffer = _nmalloc(MAX_TRACE_BUFFER * sizeof(struct traceRecord_tag));	// allocate trace bugffer in DGROUP
      if ( pTraceBuffer == NULL )
         {
-         printf("ERR: startScheduler() - trace buffer malloc()\n");
+         printf("  failed trace buffer malloc()\n");
          return;
         }
 
      memset((void*) pTraceBuffer, 0, MAX_TRACE_BUFFER * sizeof(struct traceRecord_tag));
     }
 
- printf("INFO: startScheduler() - DB_LEVEL(%d)\n", traceLevel);
+ printf("  debug level DB_LEVEL(%d)\n", traceLevel);
 
- if ( registerTask(smteUtil, 64, (WORD) ((TRACE_WINDOW / wMiliSecPerTick) + 1), 0, "smteUtl") == 0 )
+ if ( registerTask(idle, 64, (WORD) ((TRACE_WINDOW / wMiliSecPerTick) + 1), 0, "idle") == 0 )
  {
-    printf("ERR: startScheduler() - smteUtil task registration failed\n");
+    printf("  failed idle() task registration\n");
     return;
  }
 
@@ -545,20 +519,22 @@ startScheduler(enum tag_traceLevel traceLvl,
     register timer task
  ----------------------------------------- */
 
+ /*
  if ( wTimerService )
     if ( !registerTask(timer, 0, 0, 0, "timer") )
        {
-        printf("ERR: startScheduler() - timer task registration failed\n");
+        printf("  failed timer task registration\n");
         return;
        }
 
- printf("INFO: startScheduler() - TIMER(%d)\n", wTimerService);
+ printf("  registered TIMER(%d)\n", wTimerService);
+ */
 
  /* -----------------------------------------
     start executive
  ----------------------------------------- */
 
- printf("INFO: startScheduler() - mSec/tick = %02x\n", wMiliSecPerTick);
+ printf("  scheduler starting mSec/tick = %02x ...\n", wMiliSecPerTick);
 
  pCurrentCb = pCbListTop;               /* point to first task           */
 
@@ -566,10 +542,13 @@ startScheduler(enum tag_traceLevel traceLvl,
 
  setupTimer(wMiliSecPerTick);           /* setup timer interrupt         */
 
- __SP = (WORD) pCurrentCb->pTopOfStack;
+ __SS = (WORD) FP_SEG(pCurrentCb->pTopOfStack);
+ __SP = (WORD) FP_OFF(pCurrentCb->pTopOfStack);
 
  __asm {
-	 	 mov sp,__SP                    /* swap to task's stack          */
+         mov    ax,__SS                 /* swap to task's stack          */
+		 mov    ss,ax
+		 mov    sp,__SP
          sti
          iret                           /*  a 'fake' iret into task      */
        };
@@ -581,11 +560,10 @@ startScheduler(enum tag_traceLevel traceLvl,
    This function returns a task id that matches the
    input task name 'szTaskName'.
 
-   Function returns the task id, or 0'' if name match
+   Function returns the task id, or '0' if name match
    failed.
 --------------------------------------------------------- */
-int
-getTidByName(char* szTaskName)     /* pointer to task name          */
+int getTidByName(char* szTaskName)     /* pointer to task name          */
 {
  struct taskControlBlock_tag* pCb;
 
@@ -614,10 +592,9 @@ getTidByName(char* szTaskName)     /* pointer to task name          */
    Function returns pointer to 'szTaskName', or NULL if
    failed.
 --------------------------------------------------------- */
-char*
-getNameByTid(int    nTid,           /* task ID to search for         */
-             char*  szTaskName,     /* task name return buffer       */
-             int    nNameLen)       /* task name buffer size         */
+char* getNameByTid(int    nTid,           /* task ID to search for         */
+                   char*  szTaskName,     /* task name return buffer       */
+                   int    nNameLen)       /* task name buffer size         */
 {
  struct taskControlBlock_tag*  pCb;
 
@@ -634,6 +611,17 @@ getNameByTid(int    nTid,           /* task ID to search for         */
 }
 
 /* ---------------------------------------------------------
+   myTid()
+
+   This function returns the task ID of the calling task
+
+--------------------------------------------------------- */
+int myTid(void)
+{
+	return (pCurrentCb->nTid);
+}
+
+/* ---------------------------------------------------------
    suspend()
 
    This function suspends calling task for the duration of
@@ -642,10 +630,9 @@ getNameByTid(int    nTid,           /* task ID to search for         */
    calculated amount of ticks, based on 'wTime'.
 
    NOTE:
-   to force an indefinite suspention use 'wTime' = 0
+   to force an indefinite suspend use 'wTime' = 0
 --------------------------------------------------------- */
-void
-suspend(WORD  wTime)                     /* suspened time in mili-seconds */
+void suspend(WORD  wTime)                     /* suspended time in mili-seconds */
 {
  DWORD  dwTickCount = 0;
 
@@ -684,8 +671,7 @@ suspend(WORD  wTime)                     /* suspened time in mili-seconds */
    Function returns the released task's ID, or '-1' if
    failed.
 --------------------------------------------------------- */
-int
-release(int nTid)                       /* task ID to release            */
+int release(int nTid)                       /* task ID to release            */
 {
  struct taskControlBlock_tag*  pCb;
  int                           nReturn = -1;
@@ -715,11 +701,10 @@ release(int nTid)                       /* task ID to release            */
    Function returns the destination task's ID, or '0' if
    failed.
 --------------------------------------------------------- */
-int
-putMsg(int   nTid,
-       int   nPayload,
-       WORD  wPayload,
-       DWORD dwPayload)
+int putMsg(int   nTid,
+           int   nPayload,
+           WORD  wPayload,
+           DWORD dwPayload)
 {
  struct traceRecord_tag        trcMessage;
  struct taskControlBlock_tag*  pCb;
@@ -808,10 +793,9 @@ putMsg(int   nTid,
 
    Function returns Q_EMPTY if failed, bPayload if not.
 --------------------------------------------------------- */
-int
-getMsg(int*    pnPayload,
-       WORD*   pwPayload,
-       DWORD*  pdwPayload)
+int getMsg(int*    pnPayload,
+           WORD*   pwPayload,
+           DWORD*  pdwPayload)
 {
  struct message_tag*  pMsg;
 
@@ -855,11 +839,10 @@ getMsg(int*    pnPayload,
    message has been received, or bMsg received if not failed and
    not timed out.
 --------------------------------------------------------- */
-int                                      /* returns Q_EMPTY if timed out     */
-waitMsg(int     nMsg,                    /* message type to wait for         */
-        WORD    wTimeOut,                /* wait time out value              */
-        WORD*   pwPayload,               /* word payload                     */
-        DWORD*  pdwPayload)              /* double word payload              */
+int waitMsg(int     nMsg,                /* message type to wait for         */
+            WORD    wTimeOut,                /* wait time out value              */
+            WORD*   pwPayload,               /* word payload                     */
+            DWORD*  pdwPayload)              /* double word payload              */
 {
  int    nPayload;
 
@@ -887,11 +870,10 @@ waitMsg(int     nMsg,                    /* message type to wait for         */
 /* ---------------------------------------------------------
    flushMsgQ()
 
-   This function will flush all messges from the calling
+   This function will flush all messages from the calling
    task's message queue.
 --------------------------------------------------------- */
-void
-flushMsgQ(void)
+void flushMsgQ(void)
 {
  CRIT_SEC_START;
 
@@ -910,10 +892,9 @@ flushMsgQ(void)
 
    Function returns '0', or '-1' if failed.
 --------------------------------------------------------- */
-int
-putDebugMsg(int    nPayload,
-            WORD   wPayload,
-            DWORD  dwPayload)
+int putDebugMsg(int    nPayload,
+                WORD   wPayload,
+                DWORD  dwPayload)
 {
  struct traceRecord_tag trcMessage;
 
@@ -956,8 +937,7 @@ putDebugMsg(int    nPayload,
    returns -1 when buffer is full.
    data can be dumped with call dumpDataLog() from any task.
 --------------------------------------------------------- */
-int
-putDataLog(WORD wData)
+int putDataLog(WORD wData)
 {
  if (nDataLogCount == LOG_BUFFER_SIZE)
     {
@@ -984,8 +964,7 @@ putDataLog(WORD wData)
    nGroupDelimiter pairs per output line with each pair
    delimited by "-" character
 --------------------------------------------------------- */
-void
-dumpDataLog(int nGroupDelimiter)
+void dumpDataLog(int nGroupDelimiter)
 {
  char  szHex[10];
  int   i;
@@ -1029,8 +1008,7 @@ dumpDataLog(int nGroupDelimiter)
 
    This function returns the 'dwGlobalTicks' count.
 --------------------------------------------------------- */
-DWORD
-getGlobalTicks(void)
+DWORD getGlobalTicks(void)
 {
  return dwGlobalTicks;
 }
@@ -1040,8 +1018,7 @@ getGlobalTicks(void)
 
    This function returns the 'MSEC_PER_TICK' value.
 --------------------------------------------------------- */
-WORD
-getMsecPerTick(void)
+WORD getMsecPerTick(void)
 {
  return wMiliSecPerTick;
 }
@@ -1050,10 +1027,9 @@ getMsecPerTick(void)
    getCbByID()
 
    Get pointer to task CB by task ID.
-   Retun NULL if not found.
+   Return NULL if not found.
 --------------------------------------------------------- */
-static struct taskControlBlock_tag*
-getCbByID(int nTid)
+static struct taskControlBlock_tag* getCbByID(int nTid)
 {
  struct taskControlBlock_tag*  pCb;
  int    nFound = 0;

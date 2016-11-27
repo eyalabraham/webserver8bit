@@ -20,7 +20,6 @@
 ;
             extrn      _dwGlobalTicks : word
             extrn      _pCurrentCb    : word
-            extrn      _pCbListTop    : word
             extrn      _nCritSecFlag  : word
 ;
             extrn      setCSflag_     : proc far
@@ -51,17 +50,6 @@ nWaitType           DW      ?
 nMsgWait            DW      ?
 szTaskName          DB      9 DUP (?)
 taskControlBlock_tag          ENDS
-;
-;nTid           equ      0
-;nState         equ      2
-;wTicks         equ      4
-;wTicksLeft     equ      6
-;task           equ      8
-;wStackSize     equ      10
-;pStackBase     equ      12
-;pTopOfStack    equ      14
-;pNextCb        equ      24
-;dwTicksSuspend equ      28
 ;
 ;----------------------------------------
 ; task state
@@ -104,8 +92,8 @@ FINT        macro
             endm
 ;
 ;
-            .CODE
-;            assume  cs:_TEXT,ds:DGROUP
+            .code
+            assume      ds:DGROUP,ss:nothing,es:nothing
 ;
 ;=====================================================
 ;  isr_()
@@ -114,6 +102,30 @@ FINT        macro
 ;  Invoked every clock tick and reschedules
 ;  to a new ready (T_READY state) task, or resumes
 ;  the current task.
+;
+;  this 'define' is located in 'internals.h':
+;       #define ISR_FRAME         8       // 8 words: ax,si,bx,cx,dx,di,es,ds,bp
+;
+;  needs to match stack frame size and register push/pop order:
+;       top (low memory)        --> bp
+;                                   es
+;                                   di
+;                                   dx
+;                                   cx
+;                                   bx
+;                                   si
+;       bottom (high memory)    --> ax
+;                                   ip      --+
+;                                   cs        | interrupt iret or far return from call
+;                                   flags   --+
+;
+;   ss:sp pairs are saved on the task control block and are 
+;   swapped in and out betwen registers by sowtfware
+;   whenever a task needs to be switched
+;
+;   assumes that ds is defined and is the data segment of the main
+;   code, holding the global variable!!
+;
 ;=====================================================
 ;
             public     isr_
@@ -161,10 +173,12 @@ isr_        proc       far
             push       bp
 ;
 ;----------------------------------------
-; save current stack pointer
+; save current stack pointer and segment
 ;----------------------------------------
 ;
             mov        word ptr [si+pTopOfStack], sp
+            mov        ax, ss
+            mov        word ptr [si+pTopOfStack+2], ax
 ;
 ;----------------------------------------
 ; restore task's tick count
@@ -175,6 +189,8 @@ isr_        proc       far
 ;
 ;----------------------------------------
 ; find next T_READY state task
+; this assumes that there is always one task
+; that is ready, this is the idle task.
 ;----------------------------------------
 ;
 NXT_TASK:
@@ -190,6 +206,8 @@ NXT_TASK:
 ;----------------------------------------
 ;
             mov        sp, word ptr [si+pTopOfStack]
+            mov        ax, word ptr [si+pTopOfStack+2]
+            mov        ss, ax
 ;
 ;----------------------------------------
 ; restore new task's machine state
@@ -248,9 +266,10 @@ reschedule_ proc       far
 ;----------------------------------------
 ;
 ;----------------------------------------
-; a return address to the rescheduler
+; a far return address to the rescheduler
 ;----------------------------------------
 ;
+            push       cs
             mov        ax, offset reschedule_
             push       ax
 ;
@@ -265,19 +284,14 @@ reschedule_ proc       far
             push       ax
 ;
 ;----------------------------------------
-; code segment
-;----------------------------------------
-;
-            mov        ax, cs                             ; this is ok in 'SMALL' model
-            push       ax
-;
-;----------------------------------------
-; task entry address
+; far task entry address
 ;----------------------------------------
 ;
             mov        si, word ptr _pCurrentCb
 ;
-            mov        ax, word ptr [si+task]
+            mov        ax, word ptr [si+task+2]           ; push task's code segment
+            push       ax
+            mov        ax, word ptr [si+task]             ; push task's offset
             push       ax
 ;
 ;----------------------------------------
@@ -300,6 +314,8 @@ RESCHEDULE:
 ;----------------------------------------
 ;
             mov        word ptr [si+pTopOfStack], sp
+            mov        ax, ss
+            mov        word ptr [si+pTopOfStack+2], ax
 ;
 ;----------------------------------------
 ; restore task's ticks value
@@ -326,6 +342,8 @@ FIND_RDY_TASK:
 ;----------------------------------------
 ;
             mov        sp, word ptr [si+pTopOfStack]
+            mov        ax, word ptr [si+pTopOfStack+2]
+            mov        ss, ax
 ;
 ;----------------------------------------
 ; restore new task's machine state
@@ -374,17 +392,34 @@ block_      proc       far
             cli                                           ; disable interrupts
 ;
 ;----------------------------------------
-; create interrupt stack frame.
-; At this point task has a short return
-; frame back into the calling code.
-; so,
-; 1. leave room for an interrupt frame,
-; 2. save all regs.
-; 3. build the interupt frame and,
-; 4. reschedule the task.
+; create interrupt stack frame out of a far call
+; return address.
+; At this point the task has a far return
+; frame back into the calling code (large model)
+; of a suspend() functon call (see below):
+;  1. leave room to complete an interrupt frame,
+;  2. save all regs.
+;  3. build the interupt frame and,
+;  4. reschedule the task.
+;
+;       before         after
+;      --------       -------
+;                [sp]--> sp
+;                        es
+;                        di
+;                        dx
+;                        cx
+;                        bx
+;                        si
+;                        ax
+;     ...........................
+;                        ip
+; [sp]--> ip             cs
+;         cs             flags <-- [bp]
+;
 ;----------------------------------------
 ;
-            sub        sp,4
+            sub        sp,2
 ;
             push       ax
             push       si
@@ -400,18 +435,16 @@ block_      proc       far
 ;----------------------------------------
 ;
             mov        bp, sp
-            add        bp, (INTR_FRAME+4)
+            add        bp, (INTR_FRAME+4)                 ; setup a pointed to top of stack frame
 ;
-            mov        dx, word ptr ss:[bp]               ; get short return add. out of the way
-            pushf
+            mov        dx, word ptr ss:[bp-2]             ; move ip up one stack 'slot'
+            mov        word ptr ss:[bp-4], dx
+            mov        dx, word ptr ss:[bp]               ; move cs up one stack 'slot'
+            mov        word ptr ss:[bp-2], dx
+            pushf                                         ; get flags
             pop        ax
             or         ax, mFLAGS                         ; set flag IF=1
-            mov        word ptr ss:[bp], ax               ; "push" flags.
-;
-            mov        ax, cs
-            mov        word ptr ss:[bp-2], ax             ; "push" CS, this is ok in 'SMALL' model
-;
-            mov        word ptr ss:[bp-4], dx             ; "push" return address
+            mov        word ptr ss:[bp], ax               ; "push" flags to bottom stack 'slot' of frame
 ;
 ;----------------------------------------
 ; jump to relevant section of reschedule()

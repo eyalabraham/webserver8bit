@@ -13,7 +13,7 @@
 #
 # setup some directories and file names
 #
-WCCOPT="-0 -ml -d1 -s -i=/home/eyal/bin/watcom/h -i=./include"
+WCCOPT="-0 -ml -d1 -s -zu -i=/home/eyal/bin/watcom/h -i=./include"
 WDISOPT="-l -e -p -s"
 
 FULLFILENAME=$1

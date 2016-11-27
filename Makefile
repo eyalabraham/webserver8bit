@@ -28,7 +28,7 @@ LINK = wlink
 #
 # tool options
 #
-CCOPT = -0 -ml -d0 -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
+CCOPT = -0 -ml -d0 -zu -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
 ASMOPT = -0 -ml
 SERLOOPLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
@@ -45,7 +45,7 @@ WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
 # dependencies
 #
 SER1LOOPDEP = $(INCDIR)/v25.h
-WSDEP = $(INCDIR)/lmte.h $(INCDIR)/names.h $(INCDIR)/messages.h
+WSDEP = $(INCDIR)/lmte.h $(INCDIR)/names.h $(INCDIR)/messages.h $(INCDIR)/t_term.h $(INCDIR)/t_dummy.h
 
 #
 # some variables for the linker
@@ -84,7 +84,7 @@ ws: ws.exe
 lmtea.o: _lmte.asm
 	$(ASM) $(ASMOPT) -fo=$@ $<
 
-ws.exe: lmtea.o lmte.o ws.o
+ws.exe: lmtea.o lmte.o t_term.o t_dummy.o ws.o
 	$(LINK) $(WSLINKCFG) FILE $(subst $(SPC),$(COM),$^)
 
 .PHONY: CLEAN

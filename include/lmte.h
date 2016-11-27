@@ -2,7 +2,7 @@
 
   LMTE.H
 
-  Large (model) Multi Task Executive (LMTE) header.
+  Large (memory model) Multi Task Executive (LMTE) header.
 
   Nov. 4, 2016  - Updated to large model
   March 16 1999 - Created
@@ -73,6 +73,9 @@ char*
 getNameByTid(int     nTid,               /* task ID to search for            */
              char*   szTaskName,         /* task name return buffer          */
              int     nNameLen);          /* task name buffer size            */
+
+int
+myTid(void);							 /* return I of calling task		 */
 
 void
 suspend(WORD  wTime);                    /* suspend time in mili-seconds    */
@@ -163,7 +166,8 @@ getMsecPerTick(void);                    /* get tick interval                */
 #define    DB_BAD_TNAME      1
 #define    DB_BAD_MSG        2
 #define    DB_BAD_PARAM      3
-#define    DB_USER           4
+#define    DB_TIME_OUT       4
+#define    DB_USER           5
 
 /* < dwPayload >            */
 /*  error location

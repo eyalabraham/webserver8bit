@@ -4,7 +4,7 @@
 
   Large (memory model) Multi Task Executive (LMTE) internal header.
 
-  Nov. 4, 2016  - Updated to large model
+  Nov.  20 2016 - Updated to large model
   July   1 2010 - reduced time to print debug info to 10msec from 100
   March 16 1999 - Created
 
@@ -21,13 +21,13 @@
 #define T_NAME_LENGTH     8       // task name identifier length
 #define DEF_STACK_SIZE    512     // default stack size in words
 #define DEF_TASK_TICKS    5       // default task time window
-#define DEF_MSGQ_SIZE     1       // default queue size in mssages
+#define DEF_MSGQ_SIZE     1       // default queue size in messages
 #define DEF_MSEC_PER_TICK 5       // mili-seconds per tick resolution
 
 #define TRACE_WINDOW      5       // mili-sec allocated to print trace info
 #define MAX_TRACE_BUFFER  100     // max trace records
 
-#define ISR_FRAME         8       /* @@ 8 words: ax,si,bx,cx,dx,di,es,bp */
+#define ISR_FRAME         8       // 8 words: ax,si,bx,cx,dx,di,es,ds,bp
 
 #define HI(word)          (BYTE) ((word & 0xff00) >> 8)
 #define LO(word)          (BYTE) (word & 0x00ff)
@@ -82,7 +82,7 @@ typedef struct taskControlBlock_tag
                 struct taskControlBlock_tag*  pNextCb;             //  32
                 struct taskControlBlock_tag*  pPrevCb;             //  36
 
-                /* suspention loop count     */
+                /* suspend loop count        */
                 DWORD                dwTicksSuspend;               //  40
 
                 /* message Q usage in message count */

@@ -157,13 +157,15 @@ need to find out why models that use 'far' data pointers, i.e. DS .neq. SS fail
   changing over to the Watcom toolchain solved the problem!
 
 ======================================================
- Notes on Borlan C 5.x toolchain/compiler
+ Notes on Borlan C 5.x and WATCOM toolchain/compiler
 ======================================================
 
 Ultimately abandoned this method and moved to using Watcom C toolchain instead of Borland
-- Watcom is more flexible with its options
+- Watcom is more flexible with its options (http://openwatcom.org/)
 - better suited for running in a Linux hosted cross compile environement
-- produced reliable code that ran in all memory models...
+- produced reliable code that ran in all memory models
+
+Kepping the notes on Borland here just incase I need them sometime...
 
 Opted to use the command line 'tasm.exe', 'tlib.exe', 'bcc.exe' and linker 'tlink.exe'
 to run the command line versions and use Eclipse as IDE + a traditional Make file will require DOSbox as follows:
