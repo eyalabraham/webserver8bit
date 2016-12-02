@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
     {
         if ( strcmp(argv[i], "-v") == 0 )
         {
-            printf("BUILD: ws.exe %s %s\n", __DATE__, __TIME__);
+            printf("Build: ws.exe %s %s\n", __DATE__, __TIME__);
             return 0;
         }
         else
@@ -58,11 +58,11 @@ int main(int argc, char* argv[])
     }
 
     // build date
-    printf("BUILD: ws.exe %s %s\n", __DATE__, __TIME__);
+    printf("Build: ws.exe %s %s\n", __DATE__, __TIME__);
 
     /* tasks:           task        stack ticks    msg  name                  */
-    assert(registerTask(t_term,       64,    1,     1,  TASK_NAME_TERM));
-    assert(registerTask(t_dummy,      64,    1,     1,  TASK_NAME_DUMMY));
+    assert(registerTask(t_term,      128,   10,     1,  TASK_NAME_TERM));
+    assert(registerTask(t_dummy,      64,   10,     1,  TASK_NAME_DUMMY));
 
     // ***  add 5 mili sec for lmte utility task  ***
 

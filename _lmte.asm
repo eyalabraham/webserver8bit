@@ -404,7 +404,7 @@ block_      proc       far
 ;
 ;       before         after
 ;      --------       -------
-;                [sp]--> sp
+;                [sp]--> bp
 ;                        es
 ;                        di
 ;                        dx
@@ -460,26 +460,29 @@ block_      endp
 ;
 ;  customized printing of ASCII string to 'stdout'.
 ;  string to be printed must be null terminated,
-;  and passed as a pointer on the stack.
+;  and passed as a *far* pointer in [DX:AX].
 ;=====================================================
 ;
             public     print_
 ;
 print_      proc       far
 ;
-            push       bp
-            mov        bp,sp
-;
             push       si
+            push       ax
             push       bx
             push       es
+            push       ds
 ;
             mov        bx, 0f000h                         ; setup pointer to V25 register/ports
             mov        es, bx
             mov        bx, 0ff00h
 ;
+            push       ax                                 ; need to do this to save AX
             call       setCSflag_                         ; enter critical section, to prevent task switch.
-            mov        si, word ptr [bp+4]                ; get pointer to string
+            pop        ax
+;
+            mov        si, ax                             ; get pointer to string offset
+            mov        ds, dx                             ; get pointer to string segment
 
 NXTC:
             mov        al, byte ptr [si]                  ; get character from string
@@ -497,10 +500,11 @@ TX_NOT_RDY:
 EXIT:
             call       clearCSflag_                       ; exit critical section.
 ;
+            pop        ds
             pop        es
             pop        bx
+            pop        ax
             pop        si
-            pop        bp
 ;
             retf
 ;

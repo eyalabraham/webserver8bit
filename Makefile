@@ -8,6 +8,12 @@
 #
 # -------------------------------------
 
+#
+# generate debug information wit WD.EXE
+# change to 'yes' or 'no'
+#
+DEBUG = no
+
 # remove existing implicit rule (dpecifically '%.o: %c')
 .SUFFIXES:
 
@@ -28,8 +34,18 @@ LINK = wlink
 #
 # tool options
 #
-CCOPT = -0 -ml -d0 -zu -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
-ASMOPT = -0 -ml
+ifeq ($(DEBUG),yes)
+CCDBG = -d2
+ASMDBG = -d1
+LINKDBG = DEBUG LINES 
+else
+CCDBG = -d0
+ASMDBG =
+LINKDBG =
+endif
+
+CCOPT = -0 -ml $(CCDBG) -zu -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
+ASMOPT = -0 -ml $(ASMDBG)
 SERLOOPLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
                  FORMAT DOS                               \
@@ -39,7 +55,8 @@ WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
             LIBPATH /home/eyal/bin/watcom/lib286     \
             FORMAT DOS                               \
             OPTION MAP=ws  			     \
-            OPTION ELIMINATE
+            OPTION ELIMINATE                         \
+            $(LINKDBG)
 
 #
 # dependencies
@@ -74,7 +91,7 @@ ser1loop: ser1loop.exe
 ser1loop.o: ser1loop.c $(SER1LOOPDEP)
 
 ser1loop.exe: ser1loop.o
-	$(LINK) $(SERLOOPLINKCFG) FILE $^
+	$(LINK) $(SERLOOPLINKCFG) FILE $^ NAME $@
 
 #
 # generate ws.exe
@@ -85,7 +102,7 @@ lmtea.o: _lmte.asm
 	$(ASM) $(ASMOPT) -fo=$@ $<
 
 ws.exe: lmtea.o lmte.o t_term.o t_dummy.o ws.o
-	$(LINK) $(WSLINKCFG) FILE $(subst $(SPC),$(COM),$^)
+	$(LINK) $(WSLINKCFG) FILE $(subst $(SPC),$(COM),$^) NAME $@
 
 .PHONY: CLEAN
 

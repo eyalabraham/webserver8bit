@@ -32,12 +32,10 @@ typedef enum tag_traceLevel
    function prototypes
 ----------------------------------------- */
 
-void
-print(char*);                            /* print string to 'stdout'         */
+void print(char*);                       /* print string to 'stdout'         */
 
-void
-sendn(void*,                             /* send string of bytes to 'stdout' */
-      int);                              /* byte count                       */
+void sendn(void*,                        /* send string of bytes to 'stdout' */
+           int);                         /* byte count                       */
 
 char*                                    /* convert number to hex string     */
 tohex(DWORD   dwNum,                     /* number to convert                */

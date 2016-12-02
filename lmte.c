@@ -58,8 +58,6 @@ volatile struct taskControlBlock_tag*  pCurrentCb    = NULL;
 struct taskControlBlock_tag*  pCbListTop       = NULL;
 
 int                           nCritSecFlag     = 0;
-WORD                          wOldVectorSeg;
-WORD                          wOldVectorOff;
 WORD                          wTimerService    = 0;
 int                           nTaskCount       = 0;
 WORD                          wMiliSecPerTick  = DEF_MSEC_PER_TICK;
@@ -78,10 +76,6 @@ WORD                          wTraceRecCount   = 0;
 */
 struct dataLog_tag            dataLogBuffer[LOG_BUFFER_SIZE];
 int                           nDataLogCount    = 0;
-
-/* general purpose registers
- */
-struct SREGS sregs;
 
 /* ---------------------------------------------------------
    isr()
@@ -329,7 +323,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
  if ( nTaskCount == MAX_TASKS_EVER )
     return 0;
 
- printf("INFO: registering task (%s)\n", szTaskName);
+ printf("Registering task (%s)\n", szTaskName);
 
  /* -----------------------------------------
     allocate task's CB on near heap
@@ -454,7 +448,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
      pCbList             = pNewCbNode;
     }
 
- printf("  registered task = %s tid = %02x\n", pNewCbNode->szTaskName, pNewCbNode->nTid);
+ printf("  registered %s / %02x\n", pNewCbNode->szTaskName, pNewCbNode->nTid);
 
  nTaskCount++;
 
@@ -476,9 +470,9 @@ void startScheduler(enum tag_traceLevel traceLvl,
                     WORD                wTimerFlag,
                     WORD                wPerTick)
 {
- _disable();
+ //_disable();
 
- printf("INFO: starting scheduler\n");
+ printf("Starting scheduler\n");
 
  if ( nTaskCount == 0 )
     {
@@ -507,13 +501,13 @@ void startScheduler(enum tag_traceLevel traceLvl,
      memset((void*) pTraceBuffer, 0, MAX_TRACE_BUFFER * sizeof(struct traceRecord_tag));
     }
 
- printf("  debug level DB_LEVEL(%d)\n", traceLevel);
-
  if ( registerTask(idle, 64, (WORD) ((TRACE_WINDOW / wMiliSecPerTick) + 1), 0, "idle") == 0 )
  {
     printf("  failed idle() task registration\n");
     return;
  }
+
+ printf("  debug level DB_LEVEL(%d)\n", traceLevel);
 
  /* -----------------------------------------
     register timer task

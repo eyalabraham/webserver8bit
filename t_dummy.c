@@ -23,6 +23,8 @@ void t_dummy(void)
 	WORD	wPayload;
 	DWORD	dwPayload;
 
+	print("in t_dummy()\n\r");
+
 	while (1)
     {
 		// wait for message

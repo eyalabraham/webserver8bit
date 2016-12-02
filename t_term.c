@@ -25,6 +25,8 @@ void t_term(void)
 
 	int		dummyTask;
 
+	print("in t_term()\n\r");
+
 	// get id of 'dummy' task
 	dummyTask = getTidByName(TASK_NAME_DUMMY);
 	if ( dummyTask == 0 )
