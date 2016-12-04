@@ -22,9 +22,6 @@
             extrn      _pCurrentCb    : word
             extrn      _nCritSecFlag  : word
 ;
-            extrn      setCSflag_     : proc far
-            extrn      clearCSflag_   : proc far
-;
 ;----------------------------------------
 ; offsets into CB structure
 ;----------------------------------------
@@ -64,22 +61,6 @@ T_SUSPENDED    equ      1
 ;
 INTR_FRAME     equ      16
 mFLAGS         equ      8200h
-;
-;----------------------------------------
-; Serial 0 IO port definitions
-;----------------------------------------
-;
-RXB0           equ      060h      ; receive buffer
-TXB0           equ      062h      ; transmit buffer
-SCS0           equ      06Bh      ; serial status reg.
-;
-;----------------------------------------
-; timer-0 register definitions
-;----------------------------------------
-;
-TMIC0          equ      09ch      ; timer interrupt control
-mTMI0EN        equ      0bfh      ; enable AND mask
-mTMI0DIS       equ      040h      ; disable OR mask
 ;
 ;----------------------------------------
 ; End-Of-Interrupt macro
@@ -454,116 +435,6 @@ block_      proc       far
             jmp        short RESCHEDULE
 ;
 block_      endp
-;
-;=====================================================
-;  print_()
-;
-;  customized printing of ASCII string to 'stdout'.
-;  string to be printed must be null terminated,
-;  and passed as a *far* pointer in [DX:AX].
-;=====================================================
-;
-            public     print_
-;
-print_      proc       far
-;
-            push       si
-            push       ax
-            push       bx
-            push       es
-            push       ds
-;
-            mov        bx, 0f000h                         ; setup pointer to V25 register/ports
-            mov        es, bx
-            mov        bx, 0ff00h
-;
-            push       ax                                 ; need to do this to save AX
-            call       setCSflag_                         ; enter critical section, to prevent task switch.
-            pop        ax
-;
-            mov        si, ax                             ; get pointer to string offset
-            mov        ds, dx                             ; get pointer to string segment
-
-NXTC:
-            mov        al, byte ptr [si]                  ; get character from string
-            cmp        al, 0                              ; '0' char is end of string?
-            je	       short EXIT                         ; exit if end of string.
-;
-            mov        byte ptr es:[bx+TXB0], al          ; send byte to TxR reg.
-TX_NOT_RDY:
-            mov        al, byte ptr es:[bx+SCS0]          ; read serial status reg.
-            and        al, 020h                           ; wait for TxR reg. empty
-            jz         short TX_NOT_RDY
-;
-            inc        si                                 ; next character.
-            jmp        short NXTC
-EXIT:
-            call       clearCSflag_                       ; exit critical section.
-;
-            pop        ds
-            pop        es
-            pop        bx
-            pop        ax
-            pop        si
-;
-            retf
-;
-print_      endp
-;
-;=====================================================
-;  sendn_()
-;
-;  customized printing of ASCII string to 'stdout'.
-;  use printn() to send 'n' bytes to serial console.
-;=====================================================
-;
-            public     sendn
-;
-sendn_      proc       far
-;
-            push       bp
-            mov        bp,sp
-;
-            push       si
-            push       bx
-            push       cx
-            push       es
-;
-            mov        bx, 0f000h                         ; setup pointer to V25 register/ports
-            mov        es, bx
-            mov        bx, 0ff00h
-;
-            call       setCSflag_                         ; enter critical section, to prevent task switch
-;
-            mov        si, word ptr [bp+4]                ; get pointer to bytes
-            mov        cx, word ptr [bp+6]                ; get byte count
-            cmp        cx, 0                              ; did we pass a 0 count?
-            je         EXIT_SENDN                         ; yes, then exit
-;
-NXT_BYTE:
-            mov        al, byte ptr [si]                  ; get character from string
-;
-            mov        byte ptr es:[bx+TXB0], al          ; send byte to TxR reg.
-WAIT_TX_RDY:
-            mov        al, byte ptr es:[bx+SCS0]          ; read serial status reg.
-            and        al, 020h                           ; wait for TxR reg. empty
-            jz         short WAIT_TX_RDY
-;
-            inc        si                                 ; next character
-            dec        cx
-            jnz        short NXT_BYTE
-EXIT_SENDN:
-            call       clearCSflag_                       ; exit critical section.
-;
-            pop        es
-            pop        cx
-            pop        bx
-            pop        si
-            pop        bp
-;
-            retf
-;
-sendn_      endp
 ;
             end
 

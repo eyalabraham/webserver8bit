@@ -113,5 +113,6 @@ clean:
 	rm -f *.map
 	rm -f *.lib
 	rm -f *.bak
+	rm -f *.cap
 	rm -f *.err
 

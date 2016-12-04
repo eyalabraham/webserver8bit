@@ -25,7 +25,7 @@ typedef enum tag_traceLevel
               __TRC_LVL0__ = 0,          /* no trace information             */
               __TRC_LVL1__,              /* trace DB_BAD_xxx debug messages  */
               __TRC_LVL2__,              /* trace inter-task messages        */
-              __TRC_LVL3__               /* trace DB_INFO messages            */
+              __TRC_LVL3__               /* trace DB_INFO messages           */
              };
 
 /* -----------------------------------------
@@ -33,9 +33,6 @@ typedef enum tag_traceLevel
 ----------------------------------------- */
 
 void print(char*);                       /* print string to 'stdout'         */
-
-void sendn(void*,                        /* send string of bytes to 'stdout' */
-           int);                         /* byte count                       */
 
 char*                                    /* convert number to hex string     */
 tohex(DWORD   dwNum,                     /* number to convert                */

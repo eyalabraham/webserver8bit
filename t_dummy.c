@@ -23,7 +23,7 @@ void t_dummy(void)
 	WORD	wPayload;
 	DWORD	dwPayload;
 
-	print("in t_dummy()\n\r");
+	print("in t_dummy()\r\n");
 
 	while (1)
     {
@@ -37,7 +37,7 @@ void t_dummy(void)
         	  putMsg((int) wPayload, ANY_PING_RESP, W_DONT_CARE, DW_DONT_CARE);
               break;
          default:
-              putDebugMsg(DB_TRACE, DB_BAD_MSG, 0L);
+              putDebugMsg(DB_TRACE, DB_BAD_MSG, (DWORD) __LINE__);
 		} // switch on bMsg
 	} // endless loop
 }

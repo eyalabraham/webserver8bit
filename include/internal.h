@@ -93,7 +93,7 @@ typedef struct taskControlBlock_tag
                 int                  nMsgWait;                     //  48
 
                 /* task name                        */
-                char                szTaskName[T_NAME_LENGTH + 1]; //  50
+                char                 szTaskName[T_NAME_LENGTH + 1];//  52
                } tasckControlBlock;
 
 typedef struct message_tag

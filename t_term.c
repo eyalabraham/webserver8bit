@@ -25,7 +25,7 @@ void t_term(void)
 
 	int		dummyTask;
 
-	print("in t_term()\n\r");
+	print("in t_term()\r\n");
 
 	// get id of 'dummy' task
 	dummyTask = getTidByName(TASK_NAME_DUMMY);
@@ -40,7 +40,8 @@ void t_term(void)
 	while (1)
     {
 		// send ping to 'dummy' task
-		putMsg(dummyTask, ANY_PING, W_DONT_CARE, DW_DONT_CARE);
+		wPayload = (WORD) myTid();
+		putMsg(dummyTask, ANY_PING, wPayload, DW_DONT_CARE);
 
 		// wait for message
 		wPayload = (WORD) myTid();
@@ -50,12 +51,12 @@ void t_term(void)
 		switch ( nMsg )
         {
 		 case Q_EMPTY:
-			  putDebugMsg(DB_TRACE, DB_TIME_OUT, 0L);
+			  putDebugMsg(DB_TRACE, DB_TIME_OUT, (DWORD) __LINE__);
 			  break;
          case ANY_PING_RESP:
               break;
          default:
-              putDebugMsg(DB_TRACE, DB_BAD_MSG, 0L);
+              putDebugMsg(DB_TRACE, DB_BAD_MSG, (DWORD) __LINE__);
         } // switch on bMsg
 
 		suspend(1000);

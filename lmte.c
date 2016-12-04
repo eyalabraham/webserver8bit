@@ -119,7 +119,24 @@ extern void block(void);
    customized printing of ASCII string to 'stdout'.
    string to be printed must be null terminated.
 --------------------------------------------------------- */
-extern void print(char* szStr);
+void print(char* szStr)
+{
+	int			i    = 0;
+	struct SFR* pSfr;
+
+	pSfr = MK_FP(0xf000, 0xff00);
+
+	setCSflag();
+
+	while ( szStr[i] != 0 )
+	{
+		pSfr->txb0 = szStr[i];
+		while ( (pSfr->scs0 & 0x20) ==0 ) {};
+		i++;
+	}
+
+	clearCSflag();
+}
 
 /* ---------------------------------------------------------
    setCSflag()
@@ -470,7 +487,7 @@ void startScheduler(enum tag_traceLevel traceLvl,
                     WORD                wTimerFlag,
                     WORD                wPerTick)
 {
- //_disable();
+ _disable();
 
  printf("Starting scheduler\n");
 
