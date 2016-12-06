@@ -23,7 +23,7 @@ void t_dummy(void)
 	WORD	wPayload;
 	DWORD	dwPayload;
 
-	print("in t_dummy()\r\n");
+	print("t_dummy(): initialized\r\n");
 
 	while (1)
     {
