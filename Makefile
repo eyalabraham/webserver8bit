@@ -101,7 +101,7 @@ ws: ws.exe
 lmtea.o: _lmte.asm
 	$(ASM) $(ASMOPT) -fo=$@ $<
 
-ws.exe: lmtea.o lmte.o t_term.o t_dummy.o ws.o
+ws.exe: lmtea.o lmte.o xprintf.o t_term.o t_dummy.o ws.o
 	$(LINK) $(WSLINKCFG) FILE $(subst $(SPC),$(COM),$^) NAME $@
 
 .PHONY: CLEAN
