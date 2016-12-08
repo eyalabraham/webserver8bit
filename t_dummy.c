@@ -11,19 +11,24 @@
 
 #include	"lmte.h"
 #include	"messages.h"
+#include    "xprintf.h"
+#include    "v25.h"
 #include	"t_dummy.h"
+
+/* -----------------------------------------
+   function prototypes
+----------------------------------------- */
 
 /* -----------------------------------------
    task function code
 ----------------------------------------- */
-
 void t_dummy(void)
 {
 	int		nMsg;
 	WORD	wPayload;
 	DWORD	dwPayload;
 
-	print("t_dummy(): initialized\r\n");
+	fprintf(cout, "t_dummy(): initialized\r\n");
 
 	while (1)
     {
@@ -41,3 +46,4 @@ void t_dummy(void)
 		} // switch on bMsg
 	} // endless loop
 }
+

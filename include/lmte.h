@@ -32,18 +32,12 @@ typedef enum tag_traceLevel
    function prototypes
 ----------------------------------------- */
 
-void print(char*);                       /* print string to 'stdout'         */
+void cout(char);						 /* character to V25 serial-0		 */
+										 /* hook to fprintf() in 'xprintf.h' */
 
-char*                                    /* convert number to hex string     */
-tohex(DWORD   dwNum,                     /* number to convert                */
-      char*   szHex,                     /* pointer to string buffer         */
-      int     nSize);                    /* string buffer size               */
+void setCSflag(void);					 /* enter a critical section		 */
 
-void
-setCSflag(void);
-
-void
-clearCSflag(void);
+void clearCSflag(void);					 /* exit a critical section			 */
 
 int
 registerTask(void   (* func)(void),      /* pointer to task                  */

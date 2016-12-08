@@ -12,13 +12,13 @@
 #include <dos.h>
 #include <i86.h>
 #include <conio.h>
-#include <stdio.h>
 #include <string.h>
 #include <malloc.h>
 
 #include "lmte.h"
 #include "internal.h"
 #include "v25.h"
+#include "xprintf.h"
 
 #pragma  intrinsic ( memcpy )		/* compile memcpy() as inline */
 #pragma  intrinsic ( strcmp )		/* compile strcmp() as inline */
@@ -27,7 +27,6 @@
    static function prototypes
 ----------------------------------------- */
 
-static	char   nibtohex(BYTE);
 static	struct taskControlBlock_tag* getCbByID(int);
 static	void   idle(void);
 
@@ -114,28 +113,17 @@ extern void reschedule(void);
 extern void block(void);
 
 /* ---------------------------------------------------------
-   print()
+   cout()
 
-   customized printing of ASCII string to 'stdout'.
-   string to be printed must be null terminated.
+   character output stream handler to V25 serial-0
 --------------------------------------------------------- */
-void print(char* szStr)
+void cout(char c)
 {
-	int			i    = 0;
 	struct SFR* pSfr;
-
-	pSfr = MK_FP(0xf000, 0xff00);
-
-	setCSflag();
-
-	while ( szStr[i] != 0 )
-	{
-		pSfr->txb0 = szStr[i];
-		while ( (pSfr->scs0 & 0x20) ==0 ) {};
-		i++;
-	}
-
-	clearCSflag();
+	
+    pSfr = MK_FP(0xf000, 0xff00);
+	while ( (pSfr->scs0 & 0x20) ==0 ) {};
+	pSfr->txb0 = c;
 }
 
 /* ---------------------------------------------------------
@@ -162,42 +150,6 @@ void clearCSflag(void)
 }
 
 /* ---------------------------------------------------------
-   nibtohex()
-
-   convert a nibble to single hex digit
---------------------------------------------------------- */
-static char nibtohex(BYTE  bNibble)
-{
-    return ( (bNibble > 9) ? (bNibble - 0x0a + 'a') : (bNibble + '0'));
-}
-
-/* ---------------------------------------------------------
-   tosz()
-
-   convert to hex.
-   return pointer to string, or NULL if error
---------------------------------------------------------- */
-char* tohex(DWORD   dwNum,
-            char*   szHex,
-            int     nSize)
-{
- register int   i;
-
- if ( nSize > 8 )
-    return NULL;
-
- szHex[nSize] = '\0';
-
- for ( i = nSize ; i > 0; i--)
-    {
-     szHex[i - 1] = nibtohex((BYTE) dwNum & 0x0f);
-     dwNum >>= 4;
-    }
-
- return szHex;
-}
-
-/* ---------------------------------------------------------
    idle()
 
    idle task.
@@ -208,8 +160,6 @@ static void idle(void)
  register struct taskControlBlock_tag* pCb;
  register struct traceRecord_tag*      pTraceRecord;
  char                                  szHex[10];
-
- //print("idle\r\n");
 
  // find suspended tasks and process suspend time
  pCb = pCbListTop;
@@ -229,31 +179,17 @@ static void idle(void)
     {
      pTraceRecord = pTraceBuffer + wTraceOut;
 
-     print("TR ");
+     setCSflag();                            // make sure nothing interrupt the printing!
 
-     tohex(pTraceRecord->dwTimeStamp, szHex, 8);
-     print(szHex);
-     print(" ");
+     fprintf(cout, "TR %08lx %02x %02x %02x %04x %08lx\r\n",
+    		 pTraceRecord->dwTimeStamp,
+			 pTraceRecord->nSourceTid,
+			 pTraceRecord->nDestTid,
+			 pTraceRecord->msgMessage.nPayload,
+			 pTraceRecord->msgMessage.wPayload,
+			 pTraceRecord->msgMessage.dwPayload);
 
-     tohex(pTraceRecord->nSourceTid, szHex, 2);
-     print(szHex);
-     print(" ");
-
-     tohex(pTraceRecord->nDestTid, szHex, 2);
-     print(szHex);
-     print(" ");
-
-     tohex(pTraceRecord->msgMessage.nPayload, szHex, 2);
-     print(szHex);
-     print(" ");
-
-     tohex(pTraceRecord->msgMessage.wPayload, szHex, 4);
-     print(szHex);
-     print(" ");
-
-     tohex(pTraceRecord->msgMessage.dwPayload, szHex, 8);
-     print(szHex);
-     print("\r\n");
+     clearCSflag();
 
      wTraceOut++;
      if ( wTraceOut >= MAX_TRACE_BUFFER )
@@ -340,7 +276,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
  if ( nTaskCount == MAX_TASKS_EVER )
     return 0;
 
- printf("Registering task (%s)\n", szTaskName);
+ fprintf(cout, "Registering task (%s)\r\n", szTaskName);
 
  /* -----------------------------------------
     allocate task's CB on near heap
@@ -349,7 +285,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
  pNewCbNode = _nmalloc(sizeof(struct taskControlBlock_tag));		// try to allocate TCB in the DGROUP segment
  if ( pNewCbNode == NULL )
     {
-     printf("  failed TCB malloc()\n");
+     fprintf(cout, "  failed TCB malloc()\r\n");
      return 0;
     }
 
@@ -365,7 +301,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
  pNewCbNode->nWaitType  = Q_NOWAIT;
  pNewCbNode->nMsgWait   = __ANY__;
 
- printf("  task entry point 0x%x:0x%x\n", (WORD) FP_SEG(func),(WORD) FP_OFF(func));
+ fprintf(cout, "  task entry point 0x%x:0x%x\r\n", (WORD) FP_SEG(func),(WORD) FP_OFF(func));
 
  /* -----------------------------------------
     allocate task's message Q on near heap
@@ -376,7 +312,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
  pNewMsgQ = _nmalloc(nQsize * sizeof(struct message_tag));			// try to allocate a message queue in the DGROUP segment
  if ( pNewMsgQ == NULL )
     {
-     printf("  failed message Q malloc()\n");
+     fprintf(cout, "  failed message Q malloc()\r\n");
      free(pNewCbNode);
      return 0;
     }
@@ -388,7 +324,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
  pNewCbNode->nQusage = 0;
  pNewCbNode->pQbase  = pNewMsgQ;
 
- printf("  message queue allocated, slot count %d\n", nQsize);
+ fprintf(cout, "  message queue allocated, slot count %d\r\n", nQsize);
 
  /* -----------------------------------------
     allocate task's stack on near heap
@@ -400,7 +336,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
  pNewStack = malloc(2 * wStack);
  if ( pNewStack == NULL )
     {
-     printf("  failed stack malloc()\n");
+     fprintf(cout, "  failed stack malloc()\r\n");
      free(pNewMsgQ);
      free(pNewCbNode);
      return 0;
@@ -411,7 +347,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
  pNewCbNode->pStackBase  = pNewStack;
  pNewCbNode->pTopOfStack = pNewStack + wStack - 1;
 
- printf("  stack allocated\n");
+ fprintf(cout, "  stack allocated\r\n");
 
  /* -----------------------------------------
     create a fake stack frame
@@ -465,7 +401,7 @@ int registerTask(void   (* func)(void),    /* pointer to task               */
      pCbList             = pNewCbNode;
     }
 
- printf("  registered %s / %02x\n", pNewCbNode->szTaskName, pNewCbNode->nTid);
+ fprintf(cout, "  registered %s / %02x\r\n", pNewCbNode->szTaskName, pNewCbNode->nTid);
 
  nTaskCount++;
 
@@ -489,11 +425,11 @@ void startScheduler(enum tag_traceLevel traceLvl,
 {
  _disable();
 
- printf("Starting scheduler\n");
+ fprintf(cout, "Starting scheduler\r\n");
 
  if ( nTaskCount == 0 )
     {
-     printf("  task queue empty. exiting\n");
+     fprintf(cout, "  task queue empty. exiting\r\n");
      return;
     }
 
@@ -511,7 +447,7 @@ void startScheduler(enum tag_traceLevel traceLvl,
      pTraceBuffer = _nmalloc(MAX_TRACE_BUFFER * sizeof(struct traceRecord_tag));	// allocate trace bugffer in DGROUP
      if ( pTraceBuffer == NULL )
         {
-         printf("  failed trace buffer malloc()\n");
+         fprintf(cout, "  failed trace buffer malloc()\r\n");
          return;
         }
 
@@ -520,11 +456,11 @@ void startScheduler(enum tag_traceLevel traceLvl,
 
  if ( registerTask(idle, 64, (WORD) ((TRACE_WINDOW / wMiliSecPerTick) + 1), 0, "idle") == 0 )
  {
-    printf("  failed idle() task registration\n");
+    fprintf(cout, "  failed idle() task registration\r\n");
     return;
  }
 
- printf("  debug level DB_LEVEL(%d)\n", traceLevel);
+ fprintf(cout, "  debug level DB_LEVEL(%d)\r\n", traceLevel);
 
  /* -----------------------------------------
     register timer task
@@ -534,18 +470,18 @@ void startScheduler(enum tag_traceLevel traceLvl,
  if ( wTimerService )
     if ( !registerTask(timer, 0, 0, 0, "timer") )
        {
-        printf("  failed timer task registration\n");
+        fprintf(cout, "  failed timer task registration\r\n");
         return;
        }
 
- printf("  registered TIMER(%d)\n", wTimerService);
+ fprintf(cout, "  registered TIMER(%d)\r\n", wTimerService);
  */
 
  /* -----------------------------------------
     start executive
  ----------------------------------------- */
 
- printf("  scheduler starting mSec/tick = %02x ...\n", wMiliSecPerTick);
+ fprintf(cout, "  scheduler starting mSec/tick = %02x ...\r\n", wMiliSecPerTick);
 
  pCurrentCb = pCbListTop;               /* point to first task           */
 
@@ -983,35 +919,31 @@ void dumpDataLog(int nGroupDelimiter)
  if ( nGroupDelimiter == 0 )
     {
      nDataLogCount = 0;
-     print("<dump-reset>\r\n");
+     fprintf(cout, "<dump-reset>\r\n");
      return;
     }
     
- print("<dump>\r\n");
+ fprintf(cout, "<dump>\r\n");
 
  for (i = 0; i < nDataLogCount; i++)
     {
-     tohex(dataLogBuffer[i].dwClockTicks, szHex, 8);
-     print(szHex);
-
-     print(":");
-
-     tohex(dataLogBuffer[i].wData, szHex, 4);
-     print(szHex);
+     fprintf(cout, "%08lx:%04x",
+             dataLogBuffer[i].dwClockTicks,
+             dataLogBuffer[i].wData, szHex);
 
      if ((i % nGroupDelimiter) == 0)
         {
-         print("\r\n");
+         fprintf(cout, "\r\n");
         }
      else
         {
-         print("-");
+         fprintf(cout, "-");
         }
     } // next trace buffer element
 
   nDataLogCount = 0; // reset trace buffer
 
-  print("</dump>\r\n");
+  fprintf(cout, "</dump>\r\n");
 }
 
 /* ---------------------------------------------------------

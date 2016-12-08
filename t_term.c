@@ -16,6 +16,7 @@
 #include	"lmte.h"
 #include	"names.h"
 #include	"messages.h"
+#include    "xprintf.h"
 #include	"t_term.h"
 
 #pragma		intrinsic ( memset )		// compile memset() as inline
@@ -69,7 +70,7 @@ struct SFR*		pSfr;
 ----------------------------------------- */
 
 static int process_cli(char *commandLine);
-static void	conout(char*);
+static void	uart_puts(char*);
 static void uart_putchr(BYTE);
 static BYTE uart_getchr(void);
 static int  uart_ischar(void);
@@ -114,9 +115,9 @@ void t_term(void)
 
     pSfr->sric1 = SER1RXINT;			// enable serial 1 Rx interrupt
 
-    conout(BANNER);
+    uart_puts(BANNER);
 
-    print("t_term(): initialized serial-1\r\n");
+    fprintf(cout, "t_term(): initialized serial-1\r\n");    // this goes on the serial-0 console!
 
     clearCSflag();
 
@@ -144,14 +145,14 @@ void t_term(void)
                     uart_putchr(inChar);                        // output a CR-LF
                     uart_putchr(LF);
                     if ( process_cli(commandLine) == -1 )       // -- process command --
-                    	conout(SYNTAX_ERR);
+                    	uart_puts(SYNTAX_ERR);
                     memset(commandLine, 0, CLI_BUFFER);         // reinitialize command line buffer for next command
                     nCliIndex = 0;
                     uart_putchr(PROMPT);						// output a prompt if required
                     break;
 
                 default:
-                    if ( nCliIndex < CLI_BUFFER )
+                    if ( nCliIndex < CLI_BUFFER || inChar == BS )
                     {
                         if ( inChar != BS )                     // is character a back-space?
                             commandLine[nCliIndex++] = inChar;  // no, then store in command line buffer
@@ -216,12 +217,7 @@ static int process_cli(char *commandLine)
     		i = 1;
     		while ( getNameByTid(i, pString, NAME_LEN) != NULL )
     		{
-    			conout(" ");
-    			conout(pString);
-    			conout(" ");
-    			tohex((WORD) i, pString, 2);
-    			conout(pString);
-    			conout("\r\n");
+                fprintf(uart_putchr, " %8s  %d\r\n", pString, i);
     			i++;
     		}
     	}
@@ -230,7 +226,7 @@ static int process_cli(char *commandLine)
     }
     else if ( strcmp(tokens[0], "help") == 0 )
     {
-        conout(HELP_TEXT);
+    	uart_puts(HELP_TEXT);
     }
     else
         return -1;
@@ -239,13 +235,13 @@ static int process_cli(char *commandLine)
 }
 
 /* -----------------------------------------
-   conout()
+   uart_puts()
 
-   print ASCII string to serial-1 console
+   send an ASCII-zero string to serial-1 console
    string to be printed must be null terminated.
 
 ----------------------------------------- */
-static void conout(char* szStr)
+static void uart_puts(char* szStr)
 {
 	int	i = 0;
 
@@ -259,8 +255,7 @@ static void conout(char* szStr)
 /* -----------------------------------------
    uart_putchr()
 
-   print ASCII string to serial-1 console
-   string to be printed must be null terminated.
+   send an ASCII character to serial-1 console
 
 ----------------------------------------- */
 static void uart_putchr(BYTE outChar)
@@ -272,8 +267,8 @@ static void uart_putchr(BYTE outChar)
 /* -----------------------------------------
    uart_getchr()
 
-   print ASCII string to serial-1 console
-   string to be printed must be null terminated.
+   get a character from the serial-1 UART
+   buffer
 
 ----------------------------------------- */
 static BYTE uart_getchr(void)
@@ -297,7 +292,7 @@ static BYTE uart_getchr(void)
 /* -----------------------------------------
    uart_ischar()
 
-   return number of characters in serial
+   return number of characters in serial-1
    receive buffer.
 
 ----------------------------------------- */

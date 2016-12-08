@@ -62,7 +62,7 @@ WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
 # dependencies
 #
 SER1LOOPDEP = $(INCDIR)/v25.h
-WSDEP = $(INCDIR)/lmte.h $(INCDIR)/names.h $(INCDIR)/messages.h $(INCDIR)/t_term.h $(INCDIR)/t_dummy.h
+WSDEP = $(INCDIR)/lmte.h $(INCDIR)/xprintf.h $(INCDIR)/names.h $(INCDIR)/messages.h $(INCDIR)/t_term.h $(INCDIR)/t_dummy.h
 
 #
 # some variables for the linker

@@ -2,37 +2,46 @@
 /* Universal string handler for user console interface  (C)ChaN, 2011     */
 /*------------------------------------------------------------------------*/
 
-#ifndef _STRFUNC
-#define _STRFUNC
+/*-------------------------------------------------------------------------
 
-#define _USE_XFUNC_OUT	1	/* 1: Use output functions */
-#define	_CR_CRLF		1	/* 1: Convert \n ==> \r\n in the output char */
+  heavily modified to remove all the functions I do not need.
+  kept on the core function xvprintf() with some modifications.
 
-#define _USE_XFUNC_IN	1	/* 1: Use input function */
-#define	_LINE_ECHO		1	/* 1: Echo back input chars in xgets function */
+  format string follow this format per variable and the types listed below
 
+  %[flags][width][length]specifier
 
-#if _USE_XFUNC_OUT
-#define xdev_out(func) xfunc_out = (void(*)(unsigned char))(func)
-extern void (*xfunc_out)(unsigned char);
-void xputc (char c);
-void xputs (const char* str);
-void xfputs (void (*func)(unsigned char), const char* str);
-void xprintf (const char* fmt, ...);
-void xsprintf (char* buff, const char* fmt, ...);
-void xfprintf (void (*func)(unsigned char), const char*	fmt, ...);
-void put_dump (const void* buff, unsigned long addr, int len, int width);
-#define DW_CHAR		sizeof(char)
-#define DW_SHORT	sizeof(short)
-#define DW_LONG		sizeof(long)
-#endif
+  specifier	Output
+  ---------	--------------------------------------
+  d			Signed decimal integer
+  u			Unsigned decimal integer
+  o			Unsigned octal
+  b			Unsigned binary
+  x			Unsigned hexadecimal integer
+  X			Unsigned hexadecimal integer (upper case)
+  c			Character
+  s			String of characters
 
-#if _USE_XFUNC_IN
-#define xdev_in(func) xfunc_in = (unsigned char(*)(void))(func)
-extern unsigned char (*xfunc_in)(void);
-int xgets (char* buff, int len);
-int xfgets (unsigned char (*func)(void), char* buff, int len);
-int xatoi (char** str, long* res);
-#endif
+  flags		description
+  ---------	--------------------------------------
+  -			Left-justify within the given field width
+  0			Left-pads the number with zeroes (0) instead of spaces when padding is specified
 
-#endif
+  width
+  ---------
+  [number] 	representing the width of the field
+
+  length
+  ---------
+  'l'		represent 'long int' 32-bit for 'x', 'X' or 'd' specifier
+
+--------------------------------------------------------------------------*/
+
+#ifndef	__XPRINTF_H__
+#define	__XPRINTF_H__
+
+void xfprintf(void (*func)(unsigned char), const char* fmt, ...);
+
+#define	fprintf	xfprintf
+
+#endif /* end ifndef __XPRINTF_H__ */
