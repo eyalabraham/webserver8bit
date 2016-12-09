@@ -33,6 +33,10 @@ BEGIN           {
                     debugType[6] = "{undefined}"                    # a marker in case I forget to undate the list...
                     
                     prevClockTics = 0                               # setup variable
+                    
+                    printf("\n")
+                    printf(" sys tics      delta tics     src         dest         message           payload    payload\n")
+                    printf("------------ -------------- --------    -------- -------------------- ------------ ---------\n")
                 }
         
 /registered/    {                                                   # build task names and IDs table

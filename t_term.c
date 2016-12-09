@@ -52,6 +52,7 @@
 
 #define     SYNTAX_ERR	"syntax error.\r\n"
 #define     HELP_TEXT	"task list    - list task names and IDs\r\n"	\
+						"ping <id>    - ping a task id\r\n"				\
 						"help         - help text\r\n"
 
 /* -----------------------------------------
@@ -186,6 +187,9 @@ static int process_cli(char *commandLine)
     char*	tempCli;
     int		numTokens;
 
+    WORD	wPayload;
+    DWORD	dwPayload;
+
     char	pString[NAME_LEN+1] = {0};
     int		i;
 
@@ -223,6 +227,30 @@ static int process_cli(char *commandLine)
     	}
     	else
     		return -1;
+    }
+    else if ( strcmp(tokens[0], "ping") == 0 && numTokens == 2 )
+    {
+    	i = atoi(tokens[1]);
+    	if (!putMsg(i, ANY_PING, myTid(), DW_DONT_CARE) )
+    	{
+    		uart_puts("invalid destination task\r\n");
+    		return 0;
+    	}
+
+    	i = waitMsg(ANY_PING_RESP, 1000, &wPayload, &dwPayload);
+    	switch ( i )
+		{
+    		case Q_EMPTY:
+    			uart_puts("ping time out\r\n");
+    			break;
+    		case ANY_PING_RESP:
+    			uart_puts("ping response ok\r\n");
+    			break;
+    		default:
+    			uart_puts("bad ping response\r\n");
+		}
+
+    	return 0;
     }
     else if ( strcmp(tokens[0], "help") == 0 )
     {

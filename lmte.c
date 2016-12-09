@@ -179,7 +179,7 @@ static void idle(void)
     {
      pTraceRecord = pTraceBuffer + wTraceOut;
 
-     setCSflag();                            // make sure nothing interrupt the printing!
+     setCSflag();                            // make sure nothing interrupts the printing!
 
      fprintf(cout, "TR %08lx %02x %02x %02x %04x %08lx\r\n",
     		 pTraceRecord->dwTimeStamp,

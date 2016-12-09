@@ -22,6 +22,7 @@ DEBUG = no
 #
 INCDIR = ./include
 PRECOMP = ../ws.pch
+VPATH = $(INCDIR)
 
 #
 # build utilities
@@ -61,8 +62,12 @@ WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
 #
 # dependencies
 #
-SER1LOOPDEP = $(INCDIR)/v25.h
-WSDEP = $(INCDIR)/lmte.h $(INCDIR)/xprintf.h $(INCDIR)/names.h $(INCDIR)/messages.h $(INCDIR)/t_term.h $(INCDIR)/t_dummy.h
+SER1LOOPDEP = v25.h
+
+CORE = internal.h v25.h lmte.h
+UTIL = xprintf.h names.h messages.h
+TASKS = t_term.h t_dummy.h
+WSDEP = $(CORE) $(UTIL) $(TASKS)
 
 #
 # some variables for the linker

@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
     printf("Build: ws.exe %s %s\n", __DATE__, __TIME__);
 
     /* tasks:           task        stack ticks    msg  name                  */
-    assert(registerTask(t_term,      128,   10,     1,  TASK_NAME_TERM));
+    assert(registerTask(t_term,      512,   10,     1,  TASK_NAME_TERM));
     assert(registerTask(t_dummy,      64,   10,     1,  TASK_NAME_DUMMY));
 
     // ***  add 5 mili sec for lmte utility task  ***
