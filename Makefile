@@ -50,12 +50,19 @@ ASMOPT = -0 -ml $(ASMDBG)
 SERLOOPLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
                  FORMAT DOS                               \
-                 OPTION MAP=ser1loop			  \
+                 OPTION MAP=ser1loop					  \
                  OPTION ELIMINATE
+
+SPITESTLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
+                 LIBPATH /home/eyal/bin/watcom/lib286     \
+                 FORMAT DOS                               \
+                 OPTION MAP=spitest						  \
+                 OPTION ELIMINATE
+
 WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
             LIBPATH /home/eyal/bin/watcom/lib286     \
             FORMAT DOS                               \
-            OPTION MAP=ws  			     \
+            OPTION MAP=ws							 \
             OPTION ELIMINATE                         \
             $(LINKDBG)
 
@@ -63,6 +70,8 @@ WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
 # dependencies
 #
 SER1LOOPDEP = v25.h
+
+SPITESTDEP = v25.h
 
 CORE = internal.h v25.h lmte.h
 UTIL = xprintf.h names.h messages.h
@@ -86,7 +95,7 @@ SPC = $(EMPTY) $(EMPTY)
 #
 # build all targets
 #
-all: ws ser1loop
+all: ws ser1loop spitest
 
 #
 # build ser1loop.exe test program
@@ -97,6 +106,16 @@ ser1loop.o: ser1loop.c $(SER1LOOPDEP)
 
 ser1loop.exe: ser1loop.o
 	$(LINK) $(SERLOOPLINKCFG) FILE $^ NAME $@
+
+#
+# build spitest.exe test program
+#
+spitest: spitest.exe
+
+spitest.o: spitest.c $(SPITESTDEP)
+
+spitest.exe: spitest.o
+	$(LINK) $(SPITESTLINKCFG) FILE $^ NAME $@
 
 #
 # generate ws.exe

@@ -1,14 +1,14 @@
 ******************************************************
 ******************************************************
 *
-* Note for embedded WebServer
+*  Note for embedded Web Server
 *
 ******************************************************
 ******************************************************
 
 Looking at two options for the hardware setup:
     1. use JK-micro NEC v25 CPU board
-    2. reuse revived PC-XT, 8086 CPU board
+    2. reuse revived PC-XT, 8086 CPU board (https://sites.google.com/site/eyalabraham/pc-xt)
 
 Peripheral options:
     Both options will require an Ethernet interface -> will use Ethernet ENC28J60
@@ -52,42 +52,133 @@ Background information on SD serial interface:
                                 9  GND             -->  5  GND
                                10  n.c             -->  not connected
     
-    - use both serial ports on PC and FlashLite to check proper communication using a small loop back program for Ser Port 1
+    use both serial ports on PC and FlashLite to check proper communication using a small loop back program for Ser Port 1
         using the following setup directories for BC compiler.
         where WINE and DOSBOX define 'l:' as '~/Documents':
          l:\webserve\src
          l:\webserve\src\include
          l:\webserve\bin
-        ser1loop.c
+         ser1loop.c
 
     {abandoned this option} writing a TSR for v25 Flash Lite by testing TSR functionality with tsrtest.c
-    - use a simple TSR to hook into timer tickes and poll a byte that can be changes from a local Basic POKE command
-      Flash Lite BIOS/DOS timer uses v25 timer-1 which is et up as follows:
+    use a simple TSR to hook into timer tickes and poll a byte that can be changes from a local Basic POKE command
+    - Flash Lite BIOS/DOS timer uses v25 timer-1 which is et up as follows:
         timer-1 control, tmc1: 0xc0   --> interval timer, with Fclk/128 = 78,125Hz
-        timer-1 modulus, md1:  4291   --> after cunting, interrupt every 18.2Hz (ok!)
+        timer-1 modulus, md1:  4291   --> after counting, interrupt every 18.2Hz (ok!)
         timer-1 interrupt, tmic0: 0x16, tmic1: 0x17, tmic2: 0xc7
                 TMF1 interrupt is generated and handled by register bank switching, vector 29
         timer-1 macro, tmms0: 0xe6, tmms1: 0x47, tmms2: 0x45
 
     use multi tasking executive used for my robot project - SMTE - as a basis for a solution that includes:
     - t_term -- console task, through serial-1 and a basic CLI list
-    - t_time -- time task that keeps time of day and general system time tick
-      for debug and potentially interface with NTP...
-    - t_ws -- web server task, maybe this can be used with more than one task copy to enable more than one concurrent connection? maybe add a feature to SMTE that allows dynamic addition and deletion of tasks?
-    - t_sd -- SD card interface task for IO to SD card
-    - t_lcd -- LCD display task, matbe part of the console task?
-    - t_eth / t_slip -- an IP stack task. this will eventually interface to Etherner chip, but can use Serial-0 with SLIP (before adding SD card and LCD...)
+    - t_time -- time task that keeps time of day and general system time tick for debug and potentially interface with NTP...
+    - t_ws   -- web server task, maybe this can be used with more than one task copy to enable more than one concurrent connection? maybe add a feature to SMTE that allows dynamic addition and deletion of tasks?
+    - t_sd   -- (optional) SD card interface task for IO to SD card
+    - t_lcd  -- LCD display task, maybe part of the console task?
+    - t_ip / t_slip -- an IP stack task. this will eventually interface to Ethernet chip, but can use Serial-0 with SLIP (before adding SD card and LCD...)
+    - t_spi  -- an SPI driver task, all tasks that need SPI service will communicate with this task: t_lcd, t_eth
 
-2. After above, use serial interface num 0 as SPI
-    - use this for LCD and SD Card (built into LCD)
+2. After above, use an ATmega328p AVR as parallel/serial SPI interface
+    - use this for Ethernet, LCD and/or SD Card (built into LCD)
     - need logic level interfacing 3.3v/5v
-    - RxD0 = MISO, TxD0 = MOSI, ^SCK0 + ^CTS0 = SCLK
+    - v25 P.0, with either DMA or simple handshaking on the parallel side of the AVR, both through v25 P.2
     - need a few of IO lines for Slave Select on v25 P.1
+    - describing two options: (1) with v25 ports 75245 and AVR, or (2) v25 with 8255 and AVR
     - what are the usable clock rates?
+    
+    option 1 connectivity schema for v25 ports 75245 and AVR:
 
-3. replace disk services INT 13 with something that can handle or replace B: with SD card "drive"
+  AVR                                             FlashLite NEC V25
+=========                                      ======================
 
-4. AVR 328P+Ethernet --> v25 P.0, with either DMA or simple handshaking, both through v25 P.2
+                                            J5
+                                        ------------------------------------------------
+                                          Port 1: PMC1=0x00, PM1=0x00
+                                          Port 2: PMC2=0x00, PM2=0x00 (out) / 0xff (in)
+
+ PB6    <----------*-------------------< ^RD/WR P1.4
+                   |
+ PB7    >----------------*-------------> ^RDY   P1.1 (INTP0)
+                   |     |
+               +--------( )---+
+               |  DIR   OE^   |
+               |              |
+               |   74LS245    |
+               |              |
+ PD0..7 <----->| [B]      [A] |<------->        Data in/out  P2.0..P2.7
+               |              |
+               |              |
+               +--------------+
+
+ PB0    <------------------------------< STB    P1.5
+
+ PC0    <------------------------------< FSEL0  P1.6
+ PC1    <------------------------------< FSEL1  P1.7
+        
+        
+ name:  FSEL1       FSEL0       LCD-CS^     LCD-D/C^    ETH-CS^
+ v25 :   P1.7        P1.6
+ AVR :   PC1         PC0         PC4         PC3         PC5
+     ----------   ---------   ----------  ----------  ----------
+          0           0           1           1           0         - Ethernet select
+          0           1           0           0           1         - LCD select command
+          1           0           0           1           1         - LCD select data
+          1           1           1           1           1         - nothing selected
+
+        write to device timing                  read from device timing
+    ---------------------------------       ---------------------------------
+
+    SSn^    `````\......../```````          SSn^    `````\......../```````
+    
+    RD/WR^  `````\......../```````          RD/WR^  ``````````````````````
+    
+    Data    -----<XXXXXXXX>-------          Data    --------<XXXXXXXX>----
+    
+    STB     ```````\...../````````          STB     `````\......./````````
+    
+    RDY^    `````````\.../````````          RDY^    `````````\.../````````
+
+
+    option 2 connectivity schema for v25 with 8255 and AVR:
+
+    v25 CPU bus                     8255                    AVR
+===================       ==========================    ===========
+
+                +-------------------+   IO addresses
+                |                   |  --------------
+                |       8255        |   PA   0xXXX0
+                |                   |   PB   0xXXX1
+INTP0** <-------| PC3               |   PC   0xXXX2
+(P1.1)          |                   |   Ctrl 0xXXX3
+                |                   |
+IORD^   ------->| RD^      PA0..PA7 |<------------>    PD0..PD7  Data
+                |               PC4 |<-------------    PB0       STB^ (AVR strobe data into 8255)
+IOWR^   ------->| WR^           PC5 |------------->    PB1       IBF  (8255 latched data, not ready = '1', ready or data read by CPU = '0')
+                |               PC6 |<-------------    PB6       ACK^ (AVR open 3-state read and ack data was read after OBF^)
+A0      ------->| A0            PC7 |------------->    PB7       OBF^ (indicate to AVR data is available for reading)
+A1      ------->| A1                |
+A2      ------->| CS^               |
+                |          PC0..PC2 |<------------>    PC0..PC2  FSEL0..FSEL2
+D0..D7  <------>| D0..D7   PB0..PB7 |<------------>    ???       n/a
+                |                   |
+                +-------------------+
+
+** INTP0 should be set to trigger on a low to high (rising edge) transition.
+
+
+ name:  FSEL2       FSEL1       FSEL0       LCD-D/C^    LCD-CS^     ETH-CS^
+ 8255:   PC2         PC1         PC0
+ AVR :   PC2         PC1         PC0         PC3         PC4         PC5
+      ---------   ---------   ---------   ----------  ----------  ----------
+          0           0           0           1           1           0         - Ethernet select
+          0           0           1           0           0           1         - LCD select command
+          0           1           0           1           0           1         - LCD select data
+          0           1           1           1           1           1         - n/a
+          1           0           0           1           1           1         - n/a
+          1           0           1           1           1           1         - n/a
+          1           1           0           1           1           1         - n/a
+          1           1           1           1           1           1         - v25 CPU to AVR
+
 
 ======================================================
  PC-XT, 8086 CPU board option
@@ -153,11 +244,11 @@ need to find out why models that use 'far' data pointers, i.e. DS .neq. SS fail
 - 'ser1loop' compiles use make it binary identical to the one compiled with the IDE
 - suspect timer clock tick interrupt that uses register bank switching:
     disabled timer ticks with basic code and in 'c' code with no change
-- never fugured out what happened here, no response from JK Micro either.
+- never figured out what happened here, no response from JK Micro either.
   changing over to the Watcom toolchain solved the problem!
 
 ======================================================
- Notes on Borlan C 5.x and WATCOM toolchain/compiler
+ Notes on Borland C 5.x and WATCOM toolchain/compiler
 ======================================================
 
 Ultimately abandoned this method and moved to using Watcom C toolchain instead of Borland
@@ -165,7 +256,7 @@ Ultimately abandoned this method and moved to using Watcom C toolchain instead o
 - better suited for running in a Linux hosted cross compile environement
 - produced reliable code that ran in all memory models
 
-Kepping the notes on Borland here just incase I need them sometime...
+Keeping the notes on Borland here just in case I need them sometime...
 
 Opted to use the command line 'tasm.exe', 'tlib.exe', 'bcc.exe' and linker 'tlink.exe'
 to run the command line versions and use Eclipse as IDE + a traditional Make file will require DOSbox as follows:
@@ -189,5 +280,4 @@ in DosBox .config define the following mount points
     # You can put your MOUNT lines here.
     mount c ~/drive_c
     mount l ~/Documents
-
 
