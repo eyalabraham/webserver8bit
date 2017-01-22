@@ -146,39 +146,42 @@ Background information on SD serial interface:
 
                 +-------------------+   IO addresses
                 |                   |  --------------
-                |       8255        |   PA   0xXXX0
+                |       8255*       |   PA   0xXXX0
                 |                   |   PB   0xXXX1
 INTP0** <-------| PC3               |   PC   0xXXX2
 (P1.1)          |                   |   Ctrl 0xXXX3
                 |                   |
 IORD^   ------->| RD^      PA0..PA7 |<------------>    PD0..PD7  Data
+                |                   |
                 |               PC4 |<-------------    PB0       STB^ (AVR strobe data into 8255)
 IOWR^   ------->| WR^           PC5 |------------->    PB1       IBF  (8255 latched data, not ready = '1', ready or data read by CPU = '0')
                 |               PC6 |<-------------    PB6       ACK^ (AVR open 3-state read and ack data was read after OBF^)
 A0      ------->| A0            PC7 |------------->    PB7       OBF^ (indicate to AVR data is available for reading)
 A1      ------->| A1                |
 A2      ------->| CS^               |
-                |          PC0..PC2 |<------------>    PC0..PC2  FSEL0..FSEL2
-D0..D7  <------>| D0..D7   PB0..PB7 |<------------>    ???       n/a
+                |          PC0..PC2 |------------->    PC0..PC2  FSEL0..FSEL2
+D0..D7  <------>| D0..D7   PB0..PB7 |------------->    ???       n/a
                 |                   |
                 +-------------------+
 
+*  8255 Port A in 'Mode 2'
 ** INTP0 should be set to trigger on a low to high (rising edge) transition.
 
 
- name:  FSEL2       FSEL1       FSEL0       LCD-D/C^    LCD-CS^     ETH-CS^
+ name:  FSEL2       FSEL1       FSEL0       ETH-CS^    LCD-CS^     LCD-D/C^     SD-CS^
  8255:   PC2         PC1         PC0
- AVR :   PC2         PC1         PC0         PC3         PC4         PC5
-      ---------   ---------   ---------   ----------  ----------  ----------
-          0           0           0           1           1           0         - Ethernet select
-          0           0           1           0           0           1         - LCD select command
-          0           1           0           1           0           1         - LCD select data
-          0           1           1           1           1           1         - n/a
-          1           0           0           1           1           1         - n/a
-          1           0           1           1           1           1         - n/a
-          1           1           0           1           1           1         - n/a
-          1           1           1           1           1           1         - v25 CPU to AVR
+ AVR :   PC2         PC1         PC0         PC5         PC4         PC3        PB2/SS^ **
+      ---------   ---------   ---------   ----------  ----------  ----------  ------------
+          0           0           0           1           0           0            1        - LCD select command
+          0           0           1           1           0           1            1        - LCD select data
+          0           1           0           0           1           1            1        - Ethernet select - read
+          0           1           1           0           1           1            1        - Ethernet select - write
+          1           0           0           1           1           1            0        - SD Card select - read
+          1           0           1           1           1           1            0        - SD Card select - write
+          1           1           0           1           1           1            1        - Read AVR status
+          1           1           1           1           1           1            1        - Write AVR command
 
+** SD card select with SPI SS^ line is not implemented
 
 ======================================================
  PC-XT, 8086 CPU board option
