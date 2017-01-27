@@ -45,7 +45,8 @@ ASMDBG =
 LINKDBG =
 endif
 
-CCOPT = -0 -ml $(CCDBG) -zu -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
+#CCOPT = -0 -ml $(CCDBG) -zu -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
+CCOPT = -0 -ml $(CCDBG) -zu -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
 ASMOPT = -0 -ml $(ASMDBG)
 SERLOOPLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
@@ -67,18 +68,6 @@ WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
             $(LINKDBG)
 
 #
-# dependencies
-#
-SER1LOOPDEP = v25.h
-
-SPITESTDEP = v25.h
-
-CORE = internal.h v25.h lmte.h
-UTIL = xprintf.h names.h messages.h
-TASKS = t_term.h t_dummy.h
-WSDEP = $(CORE) $(UTIL) $(TASKS)
-
-#
 # some variables for the linker
 # file names list
 #
@@ -95,27 +84,34 @@ SPC = $(EMPTY) $(EMPTY)
 #
 # build all targets
 #
-all: ws ser1loop spitest
+all: ws spitest
 
 #
 # build ser1loop.exe test program
 #
 ser1loop: ser1loop.exe
 
-ser1loop.o: ser1loop.c $(SER1LOOPDEP)
+ser1loop.o: ser1loop.c v25.h
 
 ser1loop.exe: ser1loop.o
 	$(LINK) $(SERLOOPLINKCFG) FILE $^ NAME $@
+
+#
+# build common objects
+#
+ppispi.o: ppispi.c ppispi.h v25.h
+
+st7735.o: st7735.c st7735.h ppispi.h
 
 #
 # build spitest.exe test program
 #
 spitest: spitest.exe
 
-spitest.o: spitest.c $(SPITESTDEP)
+spitest.o: spitest.c ppispi.h st7735.h
 
-spitest.exe: spitest.o
-	$(LINK) $(SPITESTLINKCFG) FILE $^ NAME $@
+spitest.exe: spitest.o ppispi.o st7735.o
+	$(LINK) $(SPITESTLINKCFG) FILE $(subst $(SPC),$(COM),$^) NAME $@
 
 #
 # generate ws.exe
