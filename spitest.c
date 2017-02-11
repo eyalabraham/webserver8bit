@@ -36,6 +36,10 @@ int main(int argc, char* argv[])
 
     whatToDo = NOTHING;
 
+    // build date
+    //
+    printf("Build: spitest.exe %s %s\n", __DATE__, __TIME__);
+
     // parse command line variables
     //
     if ( argc == 1 )
@@ -69,10 +73,6 @@ int main(int argc, char* argv[])
         }
     }
 
-    // build date
-    //
-    printf("Build: ws.exe %s %s\n", __DATE__, __TIME__);
-
     // test selector driver
     //
     switch ( whatToDo )
@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
 
     case LCD:                                   // LCD test
         spiIoInit();
-        initR(INITR_GREENTAB);
+        lcdInit();
         setRotation(0);
         fillScreen(ST7735_BLUE);
 

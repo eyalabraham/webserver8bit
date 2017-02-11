@@ -33,68 +33,6 @@ as well as Adafruit raw 1.8" TFT display
 #ifndef     __st7735_h__
 #define     __st7735_h__
 
-// some flags for initR()
-#define     INITR_GREENTAB      0x0
-#define     INITR_REDTAB        0x1
-#define     INITR_BLACKTAB      0x2
-
-#define     INITR_18GREENTAB    INITR_GREENTAB
-#define     INITR_18REDTAB      INITR_REDTAB
-#define     INITR_18BLACKTAB    INITR_BLACKTAB
-#define     INITR_144GREENTAB   0x1
-
-#define     ST7735_TFTWIDTH     128
-// for 1.44" display
-#define     ST7735_TFTHEIGHT_144 128
-// for 1.8" display
-#define     ST7735_TFTHEIGHT_18  160
-
-#define     ST7735_NOP          0x00
-#define     ST7735_SWRESET      0x01
-#define     ST7735_RDDID        0x04
-#define     ST7735_RDDST        0x09
-
-#define     ST7735_SLPIN        0x10
-#define     ST7735_SLPOUT       0x11
-#define     ST7735_PTLON        0x12
-#define     ST7735_NORON        0x13
-
-#define     ST7735_INVOFF       0x20
-#define     ST7735_INVON        0x21
-#define     ST7735_DISPOFF      0x28
-#define     ST7735_DISPON       0x29
-#define     ST7735_CASET        0x2A
-#define     ST7735_RASET        0x2B
-#define     ST7735_RAMWR        0x2C
-#define     ST7735_RAMRD        0x2E
-
-#define     ST7735_PTLAR        0x30
-#define     ST7735_COLMOD       0x3A
-#define     ST7735_MADCTL       0x36
-
-#define     ST7735_FRMCTR1      0xB1
-#define     ST7735_FRMCTR2      0xB2
-#define     ST7735_FRMCTR3      0xB3
-#define     ST7735_INVCTR       0xB4
-#define     ST7735_DISSET5      0xB6
-
-#define     ST7735_PWCTR1       0xC0
-#define     ST7735_PWCTR2       0xC1
-#define     ST7735_PWCTR3       0xC2
-#define     ST7735_PWCTR4       0xC3
-#define     ST7735_PWCTR5       0xC4
-#define     ST7735_VMCTR1       0xC5
-
-#define     ST7735_RDID1        0xDA
-#define     ST7735_RDID2        0xDB
-#define     ST7735_RDID3        0xDC
-#define     ST7735_RDID4        0xDD
-
-#define     ST7735_PWCTR6       0xFC
-
-#define     ST7735_GMCTRP1      0xE0
-#define     ST7735_GMCTRN1      0xE1
-
 // Color definitions
 #define	    ST7735_BLACK        0x0000
 #define	    ST7735_BLUE         0x001F
@@ -108,20 +46,19 @@ as well as Adafruit raw 1.8" TFT display
 /* -----------------------------------------
    function prototypes
 ----------------------------------------- */
-void initB(void);                                                       // for ST7735B displays
-void initR(unsigned char );                                             // for ST7735R, I need options = INITR_GREENTAB
+void lcdInit(void);                                             // initialize LCD
 void setAddrWindow(unsigned char, unsigned char, unsigned char, unsigned char); // 
-void pushColor(unsigned int);                                           // what does this do
-void fillScreen(unsigned int);                                          // fill screen with a solid color
-void drawPixel(int, int, unsigned int);                                 // draw a pixel
-void drawFastVLine(int, int, int, unsigned int);
-void drawFastHLine(int, int, int, unsigned int);
-void fillRect(int, int, int, int, unsigned int);
-void setRotation(unsigned char);                                        // screen rotation
-void invertDisplay(int i);
-int  lcdColor565(unsigned char, unsigned char, unsigned char);          // Pass 8-bit (each) R,G,B, get back 16-bit packed color
-int  lcdHeight(void);
-int  lcdWidth(void);
+void pushColor(unsigned int);                                   // send color pixel to display
+void fillScreen(unsigned int);                                  // fill screen with a solid color
+void drawPixel(int, int, unsigned int);                         // draw a pixel
+void drawFastVLine(int, int, int, unsigned int);                // vertical line
+void drawFastHLine(int, int, int, unsigned int);                // horizontal line
+void fillRect(int, int, int, int, unsigned int);                // color filled rectangle
+void setRotation(unsigned char);                                // screen rotation
+void invertDisplay(int i);                                      // invert display
+int  lcdColor565(unsigned char, unsigned char, unsigned char);  // Pass 8-bit (each) R,G,B, get back 16-bit packed color
+int  lcdHeight(void);                                           // return display pixel height
+int  lcdWidth(void);                                            // return display pixel width
 
 #endif  /* end __st7735_h__ */
 
