@@ -19,22 +19,45 @@
 /* -----------------------------------------
    definitions and globals
 ----------------------------------------- */
-#define     SPI_TEST_PARAM          -6          // to fit within the returned values of SPI IO error
-#define     USAGE                   "-r SPI-RD, -w SPI WR, -l LCD test"
-enum {NOTHING, SPIIO, LCD, ETHER} whatToDo;
+#define     SPI_TEST_PARAM      -6              // to fit within the returned values of SPI IO error
+#define     USAGE               "-r SPI-RD, -w SPI WR, -l LCD test, -b block IO"
+enum {NOTHING, SPIIO, BLOCK, LCD, ETHER} whatToDo;
+volatile int            completeFlag = 0;
+
+#define     FRAME_BUFF           6              // should be 40960 for the LCD
+static unsigned char    frameBuffer[FRAME_BUFF] = {0x55, 0x01, 0xaa, 0xf0, 0xcc, 0x0f}; // test data
 
 /* -----------------------------------------
    startup code
 ----------------------------------------- */
 
+/*------------------------------------------------
+ * spiCallBack()
+ *
+ *  DMA completion callback
+ *
+ */
+void spiCallBack(void)
+{
+    completeFlag = 1;
+    printf("spiCallBack()\n");
+}
+
+/*------------------------------------------------
+ * main()
+ *
+ */
 int main(int argc, char* argv[])
 {
     int             i, err = SPI_OK, isRead = 0;
     unsigned char   byte;
-
     int             x, y;
 
     whatToDo = NOTHING;
+
+    // build date
+    //
+    printf("Build: spitest.exe %s %s\n", __DATE__, __TIME__);
 
     // parse command line variables
     //
@@ -61,17 +84,34 @@ int main(int argc, char* argv[])
         {
             whatToDo = LCD;
         }
+        else if ( strcmp(argv[i], "-b") == 0 )
+        {
+            whatToDo = BLOCK;
+        }
         else
         {
-            printf("select -r or -w\n");
+            printf("%s\n", USAGE);
             err = SPI_TEST_PARAM;
             goto ABORT;
         }
     }
 
-    // build date
+    // initialize a frame buffer with data
     //
-    printf("Build: ws.exe %s %s\n", __DATE__, __TIME__);
+    /*
+    if ( (buffer = malloc(FRAME_BUFF)) == 0 )
+    {
+        printf("malloc() failed\n");
+        return -1;
+    }
+    
+    for (i = 0; i < FRAME_BUFF; i += 2)
+    {
+        buffer[i] = 0x55;
+        buffer[i+1] = 0xaa;
+        printf("%d\r", i);
+    }
+    */
 
     // test selector driver
     //
@@ -85,9 +125,9 @@ int main(int argc, char* argv[])
         for ( i = 0; i < 32000; i++)
         {
             if ( isRead )
-                err = spiReadByte(ETHERNET_RD, &byte);
+                err = spiReadByte(SD_CARD_RD, &byte);
             else
-                err = spiWriteByte(ETHERNET_WR, 0x55);
+                err = spiWriteByte(SD_CARD_WR, 0x55);
 
             if ( err != SPI_OK )
             {
@@ -97,26 +137,43 @@ int main(int argc, char* argv[])
         }
         break;
 
+    case BLOCK:                                 // write a block of data to SPI using DMA channel 0
+        spiIoInit();
+        printf("spiIoInit() done\n");
+        spiWriteBlock(ETHERNET_WR, frameBuffer, FRAME_BUFF, spiCallBack);
+        printf("spiWriteBlock() done\n");
+        while ( !completeFlag ) {}              // connect logic analyzer to MOSI line and check data patterns
+        break;
+
     case LCD:                                   // LCD test
         spiIoInit();
-        initR(INITR_GREENTAB);
+        printf("spiIoInit() done\n");
+        lcdInit();
+        printf("lcdInit() done\n");
         setRotation(0);
+        fillScreen(ST7735_BLACK);
         fillScreen(ST7735_BLUE);
+        fillScreen(ST7735_RED);
+        fillScreen(ST7735_GREEN);
+        fillScreen(ST7735_CYAN);
+        fillScreen(ST7735_MAGENTA);
+        fillScreen(ST7735_YELLOW);
+        fillScreen(ST7735_WHITE);
 
         for (y=0; y < lcdHeight(); y+=5)       // draw some lines in yellow
         {
-            drawFastHLine(0, y, lcdWidth(), ST7735_YELLOW);
+            drawFastHLine(0, y, lcdWidth(), ST7735_RED);
         }
         for (x=0; x < lcdWidth(); x+=5)
         {
-            drawFastVLine(x, 0, lcdHeight(), ST7735_YELLOW);
+            drawFastVLine(x, 0, lcdHeight(), ST7735_BLUE);
         }
 
         break;
 
     case ETHER:                                 // ethernet test
+        spiIoInit();
         break;
-
     }
 
 ABORT:

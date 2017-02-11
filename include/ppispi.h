@@ -21,6 +21,7 @@
 #define     SPI_ERR_RX_TIMEOUT      -3          // receive time out, ready not received from interface
 #define     SPI_IO_DIR_ERR          -4          // wrong IO direction, read in a write function or write in a read function
 #define		SPI_RD_ERR				-5			// read initiated before input buffer cleared
+#define     SPI_WR_ERR              -6          // error with SPI write
 
 typedef enum                                    // valid devices supported
 {

@@ -45,8 +45,8 @@ ASMDBG =
 LINKDBG =
 endif
 
-#CCOPT = -0 -ml $(CCDBG) -zu -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
-CCOPT = -0 -ml $(CCDBG) -zu -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
+#CCOPT = -0 -ml $(CCDBG) -zu -oi -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
+CCOPT = -0 -ml $(CCDBG) -zu -oi -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
 ASMOPT = -0 -ml $(ASMDBG)
 SERLOOPLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
