@@ -46,19 +46,19 @@ as well as Adafruit raw 1.8" TFT display
 /* -----------------------------------------
    function prototypes
 ----------------------------------------- */
-void lcdInit(void);                                             // initialize LCD
-void setAddrWindow(unsigned char, unsigned char, unsigned char, unsigned char); // 
-void pushColor(unsigned int);                                   // send color pixel to display
-void fillScreen(unsigned int);                                  // fill screen with a solid color
-void drawPixel(int, int, unsigned int);                         // draw a pixel
-void drawFastVLine(int, int, int, unsigned int);                // vertical line
-void drawFastHLine(int, int, int, unsigned int);                // horizontal line
-void fillRect(int, int, int, int, unsigned int);                // color filled rectangle
-void setRotation(unsigned char);                                // screen rotation
-void invertDisplay(int i);                                      // invert display
-int  lcdColor565(unsigned char, unsigned char, unsigned char);  // Pass 8-bit (each) R,G,B, get back 16-bit packed color
-int  lcdHeight(void);                                           // return display pixel height
-int  lcdWidth(void);                                            // return display pixel width
+void         lcdInit(void);                                             // initialize LCD
+void         setAddrWindow(unsigned char, unsigned char, unsigned char, unsigned char); //
+void         pushColor(unsigned int);                                   // send color pixel to display
+void         fillScreen(unsigned int);                                  // fill screen with a solid color
+void         drawPixel(int, int, unsigned int);                         // draw a pixel
+void         drawFastVLine(int, int, int, unsigned int);                // vertical line
+void         drawFastHLine(int, int, int, unsigned int);                // horizontal line
+void         fillRect(int, int, int, int, unsigned int);                // color filled rectangle
+void         setRotation(unsigned char);                                // screen rotation
+void         invertDisplay(int i);                                      // invert display
+unsigned int lcdColor565(unsigned char, unsigned char, unsigned char);  // Pass 8-bit (each) R,G,B, get back 16-bit packed color
+int          lcdHeight(void);                                           // return display pixel height
+int          lcdWidth(void);                                            // return display pixel width
 
 #endif  /* end __st7735_h__ */
 

@@ -148,7 +148,7 @@ Background information on SD serial interface:
                 |                   |  --------------
                 |       8255*       |   PA   0xXXX0
                 |                   |   PB   0xXXX1
-INTP0** <-------| PC3               |   PC   0xXXX2
+DMARQ0** <------| PC3               |   PC   0xXXX2
 (P1.1)          |                   |   Ctrl 0xXXX3
                 |                   |
 IORD^   ------->| RD^      PA0..PA7 |<------------>    PD0..PD7  Data
@@ -165,12 +165,12 @@ D0..D7  <------>| D0..D7   PB0..PB7 |------------->    ???       n/a
                 +-------------------+
 
 *  8255 Port A in 'Mode 2'
-** INTP0 should be set to trigger on a low to high (rising edge) transition.
+** set DMA channel 0 to an IO/mem transfer, and use DMA for large block transfers to and from the 8255.
 
 
  name:  FSEL2       FSEL1       FSEL0       ETH-CS^    LCD-CS^     LCD-D/C^     SD-CS^
  8255:   PC2         PC1         PC0
- AVR :   PC2         PC1         PC0         PC5         PC4         PC3        PB2/SS^ **
+ AVR :   PC2         PC1         PC0         PC5         PC4         PC3        PB2/SS^
       ---------   ---------   ---------   ----------  ----------  ----------  ------------
           0           0           0           1           0           0            1        - LCD select command
           0           0           1           1           0           1            1        - LCD select data
@@ -181,7 +181,6 @@ D0..D7  <------>| D0..D7   PB0..PB7 |------------->    ???       n/a
           1           1           0           1           1           1            1        - Read AVR status
           1           1           1           1           1           1            1        - Write AVR command
 
-** SD card select with SPI SS^ line is not implemented
 
 ======================================================
  PC-XT, 8086 CPU board option

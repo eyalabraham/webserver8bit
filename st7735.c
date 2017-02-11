@@ -110,11 +110,9 @@ int     tabcolor;
 int     _width, _height;
 int     rotation;
 
-// Rather than a bazillion writecommand() and writedata() calls, screen
-// initialization commands and arguments are organized in these tables
-// stored in PROGMEM.  The table may look bulky, but that's mostly the
-// formatting -- storage-wise this is hundreds of bytes more compact
-// than the equivalent code.  Companion function follows.
+// rather than lcdWriteCommand() and lcdWriteData() calls, screen
+// initialization commands and arguments are organized in a table.
+// table is read, parsed and issues by lcdCommandList()
 static const unsigned char
 initSeq[] =
     {                                       // consolidated initialization sequence
@@ -262,9 +260,7 @@ static void lcdCommandList(const unsigned char *addr)
 /*------------------------------------------------
  * lcdInit()
  *
- *  reads and issues a series of LCD commands groupd
- *  inside the initialized data tables
- *  Initialization code common to both 'B' and 'R' type displays
+ *  initialization of LCD screen
  *
  */
 void lcdInit(void)
@@ -446,7 +442,7 @@ void fillRect(int x, int y, int w, int h, unsigned int color)
  *  Pass 8-bit (each) R,G,B, get back 16-bit packed color
  *
  */
-int lcdColor565(unsigned char r, unsigned char g, unsigned char b)
+unsigned int lcdColor565(unsigned char r, unsigned char g, unsigned char b)
 {
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
