@@ -20,13 +20,34 @@
    definitions and globals
 ----------------------------------------- */
 #define     SPI_TEST_PARAM          -6          // to fit within the returned values of SPI IO error
-#define     USAGE                   "-r SPI-RD, -w SPI WR, -l LCD test"
-enum {NOTHING, SPIIO, LCD, ETHER} whatToDo;
+#define     USAGE                   "-r SPI-RD, -w SPI WR, -l LCD test -b DMA block-IO"
+
+enum {NOTHING, SPIIO, BLOCK, LCD, ETHER} whatToDo;
+volatile int            completeFlag = 0;
+
+#define     FRAME_BUFF           6              // should be 40960 for the LCD
+static unsigned char    frameBuffer[FRAME_BUFF] = {0x55, 0x01, 0xaa, 0xf0, 0xcc, 0x0f}; // test data
 
 /* -----------------------------------------
    startup code
 ----------------------------------------- */
 
+/*------------------------------------------------
+ * spiCallBack()
+ *
+ *  DMA completion callback
+ *
+ */
+void spiCallBack(void)
+{
+    completeFlag = 1;
+    printf("spiCallBack()\n");
+}
+
+/*------------------------------------------------
+ * main()
+ *
+ */
 int main(int argc, char* argv[])
 {
     int             i, err = SPI_OK, isRead = 0;
@@ -65,9 +86,13 @@ int main(int argc, char* argv[])
         {
             whatToDo = LCD;
         }
+        else if ( strcmp(argv[i], "-b") == 0 )
+        {
+            whatToDo = BLOCK;
+        }
         else
         {
-            printf("select -r or -w\n");
+            printf("%s\n", USAGE);
             err = SPI_TEST_PARAM;
             goto ABORT;
         }
@@ -95,6 +120,14 @@ int main(int argc, char* argv[])
                 break;
             }
         }
+        break;
+
+    case BLOCK:                                 // write a block of data to SPI using DMA channel 0
+        spiIoInit();
+        printf("spiIoInit() done\n");
+        spiWriteBlock(ETHERNET_WR, frameBuffer, FRAME_BUFF, spiCallBack);
+        printf("spiWriteBlock() done\n");
+        while ( !completeFlag ) {}              // *** connect logic analyzer to MOSI line and check data patterns ***
         break;
 
     case LCD:                                   // LCD test

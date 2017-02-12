@@ -126,7 +126,7 @@ static void spiDevSelect(spiDevice_t device)
  *
  *  Note for SPI WR:
  *   when the handler is invoked, there is still one byte
- *   pending transmission still help in the 8255.
+ *   pending transmission still held in the 8255.
  *   the handler will wait for OBF^ to be '1' (ACK^ by the AVR)
  *   before removing device select on PPIPC0..2
  *
@@ -142,13 +142,13 @@ static void __interrupt spiIoComplete(void)
     pSfr->dic0 = DMA0_INT_INIT;                 // mask DMA0 TC interrupt
 
     if ( nSpiReadBlock )
-    {                                           // when completing a read operation with TC = 0
+    {                                           // when completing a read operation with TC = 0xffff
         while ( !(inp(PPIPC) & IBF) ) {}       // last extra byte is being read by the AVR, wait for Rx to complete
         spiDevSelect(NONE);                     // disable device selects
         inp(PPIPA);                             // "release" the AVR by dummy reading the extra byte
     }
     else
-    {                                           // when completing a write operation with TC = 0
+    {                                           // when completing a write operation with TC = 0xffff
         while ( !(inp(PPIPC) & OBF) ) {}        // if OBF^ is '1' AVR ACK'ed the last byte and is transmitting it,
         spiDevSelect(NONE);                     // it is now safe to deselect the device
                                                 // device deselect must happen ~1.5 SPI-byte-transmit-time after DMA TC interrupt or earlier
@@ -315,7 +315,7 @@ int spiReadBlock(spiDevice_t device, unsigned char* inputBuffer, unsigned int co
 }
 
 /*------------------------------------------------
- * spiReadBlock()
+ * spiWriteBlock()
  *
  *  write a block of data out of buffer location of certain size,
  *  at completion call a callback function
@@ -323,5 +323,48 @@ int spiReadBlock(spiDevice_t device, unsigned char* inputBuffer, unsigned int co
  */
 int spiWriteBlock(spiDevice_t device, unsigned char* outputBuffer, unsigned int count, void (*spiCallBack)(void))
 {
-    return SPI_OK;
+    int                     nReturn;
+    struct dmaChannel_t*    pDmaChannel;
+    unsigned long           dwLinearAddress;
+
+    if ( device == ETHERNET_RD || device == SD_CARD_RD )
+        return SPI_IO_DIR_ERR;
+
+    if ( count == 0 )                           // exit with error if count is '0'
+        return SPI_WR_ERR;
+
+    if ( count == 1 )                           // if count is '1' don't use DMA transfer
+        return spiWriteByte(device, *outputBuffer);
+
+    if ( activeDevice == NONE )
+    {
+        nSpiReadBlock = 0;                      // flag as a write operation
+
+        callBack = spiCallBack;                 // save call back in a global variable
+
+        INTE1_SET;                              // setup 8255 to generate interrupt on mode-2 outputs
+
+                                                // pointer to 20-bit linear DMA address
+        dwLinearAddress = (unsigned long) FP_SEG(outputBuffer) * 16 + (unsigned long) FP_OFF(outputBuffer) + 1;
+
+                                                // initialize DMA channel 0
+        pSfr->sar0  = (unsigned int) dwLinearAddress;
+        pSfr->sar0h = (unsigned char) (dwLinearAddress >> 16);
+        pSfr->dar0  = 0;
+        pSfr->dar0h = 0;
+        pSfr->tc0   = (count - 1) - 1;
+
+        pSfr->dmac0 = DMA0_INC_SRC;             // increment memory source address
+        pSfr->dic0 &= ~DMA0_INT_MASK;           // enable interrupt for DMA channel 0
+        pSfr->dmam0 = DMA0_MEM_IO + DMA0_ENABLE; // enable memory to IO single transfers
+
+        spiDevSelect(device);                   // select device
+        outp(PPIPA, *outputBuffer);             // initiate first byte write, ACKs from 8255 will trigger DMA transfers ...
+
+        nReturn = SPI_OK;
+    }
+    else
+        nReturn = SPI_BUSY;
+
+    return nReturn;
 }
