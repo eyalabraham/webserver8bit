@@ -311,7 +311,48 @@ int spiWriteByte(spiDevice_t device, unsigned char data)
  */
 int spiReadBlock(spiDevice_t device, unsigned char* inputBuffer, unsigned int count, void (*spiCallBack)(void))
 {
-    return SPI_OK;
+    int                     nReturn;
+    unsigned long           dwLinearAddress;
+
+    if ( !(device == ETHERNET_RD || device == SD_CARD_RD) )
+        return SPI_IO_DIR_ERR;
+
+    if ( count == 0 )                           // exit with error if count is '0'
+        return SPI_RD_ERR;
+
+    if ( count == 1 )                           // if count is '1' don't use DMA transfer
+        return spiReadByte(device, inputBuffer);
+
+    if ( activeDevice == NONE )
+    {
+        nSpiReadBlock = 1;                      // flag as a read operation
+
+        callBack = spiCallBack;                 // save call back in a global variable
+
+        INTE2_SET;                              // setup 8255 to generate interrupt on model-2 inputs
+
+                                                // pointer to 20-bit linear DMA address
+        dwLinearAddress = (unsigned long) FP_SEG(inputBuffer) * 16 + (unsigned long) FP_OFF(inputBuffer);
+
+                                                // initialize DMA channel 0
+        pSfr->sar0  = 0;
+        pSfr->sar0h = 0;
+        pSfr->dar0  = (unsigned int) dwLinearAddress;
+        pSfr->dar0h = (unsigned char) (dwLinearAddress >> 16);
+        pSfr->tc0   = count - 1;
+
+        pSfr->dmac0 = DMA0_INC_DEST;            // increment memory destination address
+        pSfr->dic0 &= ~DMA0_INT_MASK;           // enable interrupt for DMA channel 0
+        pSfr->dmam0 = DMA0_IO_MEM + DMA0_ENABLE; // enable IO to memory single transfers
+
+        spiDevSelect(device);                   // select device, AVR will start SPI reads
+
+        nReturn = SPI_OK;
+    }
+    else
+        nReturn = SPI_BUSY;
+
+    return nReturn;
 }
 
 /*------------------------------------------------
@@ -324,7 +365,6 @@ int spiReadBlock(spiDevice_t device, unsigned char* inputBuffer, unsigned int co
 int spiWriteBlock(spiDevice_t device, unsigned char* outputBuffer, unsigned int count, void (*spiCallBack)(void))
 {
     int                     nReturn;
-    struct dmaChannel_t*    pDmaChannel;
     unsigned long           dwLinearAddress;
 
     if ( device == ETHERNET_RD || device == SD_CARD_RD )

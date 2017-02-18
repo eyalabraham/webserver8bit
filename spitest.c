@@ -125,9 +125,17 @@ int main(int argc, char* argv[])
     case BLOCK:                                 // write a block of data to SPI using DMA channel 0
         spiIoInit();
         printf("spiIoInit() done\n");
-        spiWriteBlock(ETHERNET_WR, frameBuffer, FRAME_BUFF, spiCallBack);
-        printf("spiWriteBlock() done\n");
+//        spiWriteBlock(ETHERNET_WR, frameBuffer, FRAME_BUFF, spiCallBack);
+//        printf("spiWriteBlock() done\n");
+        for (i = 0; i < FRAME_BUFF; i++)
+            printf("0x%x ", frameBuffer[i]);
+        printf("\n");
+        spiReadBlock(ETHERNET_RD, frameBuffer, FRAME_BUFF-2, spiCallBack);
+        printf("spiReadBlock() done\n");
         while ( !completeFlag ) {}              // *** connect logic analyzer to MOSI line and check data patterns ***
+        for (i = 0; i < FRAME_BUFF; i++)
+            printf("0x%x ", frameBuffer[i]);
+        printf("\n");
         break;
 
     case LCD:                                   // LCD test
