@@ -24,14 +24,14 @@
   +-----+-----+-----+-----+-----+-----+-----+-----+
      |     |     |     |     |     |     |     |
      |     |     |     |     |     |     |     |
-     |     |     |     |     |     |     |     +--- [o]  RST^ (AVR reset line)
-     |     |     |     |     |     |     +--------- [o]
-     |     |     |     |     |     +--------------- [o]
+     |     |     |     |     |     |     |     +--- [o]  \
+     |     |     |     |     |     |     +--------- [o]  | device select
+     |     |     |     |     |     +--------------- [o]  /
      |     |     |     |     +--------------------- [o]
      |     |     |     +--------------------------- [o]
      |     |     +--------------------------------- [o]
      |     +--------------------------------------- [o]
-     +--------------------------------------------- [o]
+     +--------------------------------------------- [o]  RST^ (AVR reset line)
 
    PPI 8255 Port C
 
@@ -40,9 +40,9 @@
   +-----+-----+-----+-----+-----+-----+-----+-----+
      |     |     |     |     |     |     |     |
      |     |     |     |     |     |     |     |
-     |     |     |     |     |     |     |     +--- [o]  \
-     |     |     |     |     |     |     +--------- [o]   | device select line
-     |     |     |     |     |     +--------------- [o]  /
+     |     |     |     |     |     |     |     +--- [o]
+     |     |     |     |     |     |     +--------- [o]
+     |     |     |     |     |     +--------------- [o]
      |     |     |     |     +--------------------- [o]  INTR to CPU
      |     |     |     +--------------------------- [i]  STB^ from AVR / INTE2 enable interrupt from AVR strobe
      |     |     +--------------------------------- [o]  IBF to AVR
@@ -59,13 +59,13 @@
 
 #define     PPI_MODE        0xc0                // PA in mode-2, PB in mode 0 output, interrupt generation disabled
 #define     PPIPC_INIT      0x07                // PC0..PC2 initialization, INTE1 and INTE2 set with 8255 bit-clear command
-#define     PPIPB_INIT      0x01                // reset line initialization
+#define     PPIPB_INIT      0x87                // reset line and device select initialization
 
 #define     DEV_BIT_MASK    0x07                // mask for device select bits
 
 #define     OBF             0x80                // Mode-2 handshake status
 #define     IBF             0x20
-#define     AVR_RST         0x01                // AVR rest pin on PPI-PB
+#define     AVR_RST         0x80                // AVR rest pin on PPI-PB7
 
 #define     INTE1_SET       outp(PPICNT,0x0d)   // INTE flip-flop
 #define     INTE1_CLEAR     outp(PPICNT,0x0c)
@@ -105,15 +105,15 @@ static int              nSpiReadBlock;          // read (=1) or write (=0) DMA c
 /*------------------------------------------------
  * spiDevSelect()
  *
- *  set device select lines on 8255 PPIPC
+ *  set device select lines on 8255 PPIPB
  *
  */
 static void spiDevSelect(spiDevice_t device)
 {
     unsigned char   select;
 
-    select = (inp(PPIPC) & ~DEV_BIT_MASK) | (device & DEV_BIT_MASK);
-    outp(PPIPC, select);
+    select = (inp(PPIPB) & ~DEV_BIT_MASK) | (device & DEV_BIT_MASK);
+    outp(PPIPB, select);
     activeDevice = device;
 }
 
@@ -128,7 +128,7 @@ static void spiDevSelect(spiDevice_t device)
  *   when the handler is invoked, there is still one byte
  *   pending transmission held in the 8255.
  *   the handler will wait for OBF^ to be '1' (ACK^ by the AVR)
- *   before removing device select on PPIPC0..2
+ *   before removing device select on PPIPB0..2
  *
  *  Note for SPI RD:
  *   when the handler is invoked there is one extra byte that
