@@ -126,11 +126,15 @@ static void spiDevSelect(spiDevice_t device)
  *
  *  Note for SPI WR:
  *   when the handler is invoked, there is still one byte
- *   pending transmission still held in the 8255.
+ *   pending transmission held in the 8255.
  *   the handler will wait for OBF^ to be '1' (ACK^ by the AVR)
  *   before removing device select on PPIPC0..2
  *
  *  Note for SPI RD:
+ *   when the handler is invoked there is one extra byte that
+ *   was read from SPI bus; this byte should be discarded
+ *   wait for IBF to be '1', deselect device selects and dummy read
+ *   the extra byte
  *
  */
 static void __interrupt spiIoComplete(void)
@@ -141,17 +145,15 @@ static void __interrupt spiIoComplete(void)
     pSfr->dmam0 = DMA0_MEM_IO;                  // *** no need, EDMA will be cleared with TC, disable DMA on channel 0
     pSfr->dic0 = DMA0_INT_INIT;                 // mask DMA0 TC interrupt
 
+    while ( !(inp(PPIPC) & (IBF | OBF))) {}     // when completing a read 'or' write operation with TC = 0xffff:
+                                                // - read: last extra byte is being read by the AVR, wait for Rx to complete IBF is '1'
+                                                // - write: if OBF^ is '1' AVR ACK'ed the last byte and is transmitting it,
+    spiDevSelect(NONE);                         // now it is ok to disable device selects
+                                                // device deselect must happen ~1.5 SPI-byte-transmit-time after DMA TC interrupt or earlier
+
     if ( nSpiReadBlock )
     {                                           // when completing a read operation with TC = 0xffff
-        while ( !(inp(PPIPC) & IBF) ) {}       // last extra byte is being read by the AVR, wait for Rx to complete
-        spiDevSelect(NONE);                     // disable device selects
         inp(PPIPA);                             // "release" the AVR by dummy reading the extra byte
-    }
-    else
-    {                                           // when completing a write operation with TC = 0xffff
-        while ( !(inp(PPIPC) & OBF) ) {}        // if OBF^ is '1' AVR ACK'ed the last byte and is transmitting it,
-        spiDevSelect(NONE);                     // it is now safe to deselect the device
-                                                // device deselect must happen ~1.5 SPI-byte-transmit-time after DMA TC interrupt or earlier
     }
 
     if ( callBack )                             // invoke the callback function if one is defined
