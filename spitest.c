@@ -26,7 +26,11 @@ enum {NOTHING, SPIIO, BLOCK, LCD, ETHER} whatToDo;
 volatile int            completeFlag = 0;
 
 #define     FRAME_BUFF           6              // should be 40960 for the LCD
-static unsigned char    frameBuffer[FRAME_BUFF] = {0x55, 0x01, 0xaa, 0xf0, 0xcc, 0x0f}; // test data
+//static unsigned char    frameBuffer[FRAME_BUFF] = {0x55, 0x01, 0xaa, 0xf0, 0xcc, 0x0f}; // test data
+static unsigned char    frameBuffer[FRAME_BUFF] = {0x18, 0x18, 0x18, 0x18, 0x18, 0x18}; // test data
+unsigned char*          redBuffer;
+unsigned char*          blueBuffer;
+unsigned char*          tempBuffer[2];
 
 /* -----------------------------------------
    startup code
@@ -155,18 +159,38 @@ int main(int argc, char* argv[])
     case LCD:                                   // LCD test
         spiIoInit();
         lcdInit();
-        setRotation(0);
-        fillScreen(ST7735_BLUE);
+        redBuffer = lcdFrameBufferInit(ST7735_RED);
+        blueBuffer = lcdFrameBufferInit(ST7735_BLUE);
 
+        if ( blueBuffer == 0 || redBuffer == 0 )
+        {
+            printf("lcdFrameBufferInit() failed redBuffer=%lu blueBuffer=%lu\n", redBuffer, blueBuffer);
+        }
+        else
+        {
+            tempBuffer[0] = redBuffer;
+            tempBuffer[1] = blueBuffer;
+            for ( i = 0; i < 10; i++)
+            {
+                completeFlag = 0;
+                lcdFrameBufferPush(tempBuffer[(i % 2)], spiCallBack);
+                while ( !completeFlag ) {}
+            }
+        }
+
+        lcdFrameBufferFree(redBuffer);
+        lcdFrameBufferFree(blueBuffer);
+        /*
+        lcdFillScreen(ST7735_BLUE);
         for (y=0; y < lcdHeight(); y+=5)       // draw some lines in yellow
         {
-            drawFastHLine(0, y, lcdWidth(), ST7735_YELLOW);
+            lcdDrawFastHLine(0, y, lcdWidth(), ST7735_YELLOW);
         }
         for (x=0; x < lcdWidth(); x+=5)
         {
-            drawFastVLine(x, 0, lcdHeight(), ST7735_YELLOW);
+            lcdDrawFastVLine(x, 0, lcdHeight(), ST7735_YELLOW);
         }
-
+        */
         break;
 
     case ETHER:                                 // ethernet test

@@ -149,7 +149,7 @@ Background information on SD serial interface:
                 |       8255*       |   PA   0xXXX0
                 |                   |   PB   0xXXX1
 DMARQ0** <------| PC3               |   PC   0xXXX2
-(P1.1)          |                   |   Ctrl 0xXXX3
+(P2.0)          |                   |   Ctrl 0xXXX3
                 |                   |
 IORD^   ------->| RD^      PA0..PA7 |<------------>    PD0..PD7  Data
                 |                   |
@@ -159,8 +159,8 @@ IOWR^   ------->| WR^           PC5 |------------->    PB1       IBF  (8255 latc
 A0      ------->| A0            PC7 |------------->    PB7       OBF^ (indicate to AVR data is available for reading)
 A1      ------->| A1                |
 A2      ------->| CS^               |
-                |          PC0..PC2 |------------->    PC0..PC2  FSEL0..FSEL2
-D0..D7  <------>| D0..D7   PB0..PB7 |------------->    ???       n/a
+                |          PC0..PC2 |------------->    n.c.
+D0..D7  <------>| D0..D7   PB0..PB7 |------------->    PB0..PB2  FSEL0..FSEL2
                 |                   |
                 +-------------------+
 
@@ -169,7 +169,7 @@ D0..D7  <------>| D0..D7   PB0..PB7 |------------->    ???       n/a
 
 
  name:  FSEL2       FSEL1       FSEL0       ETH-CS^    LCD-CS^     LCD-D/C^     SD-CS^
- 8255:   PC2         PC1         PC0
+ 8255:   PB2         PB1         PB0
  AVR :   PC2         PC1         PC0         PC5         PC4         PC3        PB2/SS^
       ---------   ---------   ---------   ----------  ----------  ----------  ------------
           0           0           0           1           0           0            1        - LCD select command

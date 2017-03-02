@@ -31,29 +31,16 @@ as well as Adafruit raw 1.8" TFT display
  *
  */
 
+#include    <stdlib.h>
+#include    <string.h>
+
 #include    "st7735.h"
 #include    "ppispi.h"                          // 8255 PPI to AVR/SPI driver
 
 /* -----------------------------------------
    definitions and types
 ----------------------------------------- */
-// some flags for initR()
-#define     INITR_GREENTAB      0x0
-#define     INITR_REDTAB        0x1
-#define     INITR_BLACKTAB      0x2
-
-#define     INITR_18GREENTAB    INITR_GREENTAB
-#define     INITR_18REDTAB      INITR_REDTAB
-#define     INITR_18BLACKTAB    INITR_BLACKTAB
-#define     INITR_144GREENTAB   0x1
-
-#define     ST7735_TFTWIDTH     128
-// for 1.44" display
-#define     ST7735_TFTHEIGHT_144 128
-// for 1.8" display
-#define     ST7735_TFTHEIGHT_18  160
-
-#define     ST7735_NOP          0x00
+#define     ST7735_NOP          0x00            // LCD controller commands
 #define     ST7735_SWRESET      0x01
 #define     ST7735_RDDID        0x04
 #define     ST7735_RDDST        0x09
@@ -99,16 +86,27 @@ as well as Adafruit raw 1.8" TFT display
 #define     ST7735_GMCTRP1      0xE0
 #define     ST7735_GMCTRN1      0xE1
 
+#define     MADCTL_MY           0x80            // MAD display control register command bits
+#define     MADCTL_MX           0x40
+#define     MADCTL_MV           0x20
+#define     MADCTL_ML           0x10
+#define     MADCTL_RGB          0x00
+#define     MADCTL_BGR          0x08
+#define     MADCTL_MH           0x04
+
+#define     ST7735_TFTWIDTH     128             // 1.8" LCD pixes geometry
+#define     ST7735_TFTHEIGHT    160
+
 #define     DELAY               0x80
 #define     ONE_MILI_SEC        260             // loop count for 1mSec (was 210)
 
 /* -----------------------------------------
    globals
 ----------------------------------------- */
-int     colstart, rowstart;
-int     tabcolor;
-int     _width, _height;
-int     rotation;
+static int             colstart, rowstart;
+static int             _width, _height;
+static int             rotation;
+static unsigned char*  frameBuffer;
 
 // rather than lcdWriteCommand() and lcdWriteData() calls, screen
 // initialization commands and arguments are organized in a table.
@@ -271,20 +269,19 @@ void lcdInit(void)
     _height  = 0;
     rotation = 0;
 
-    tabcolor = INITR_BLACKTAB;                  // *** for compatibility, take this out later ***
-
-    lcdCommandList(initSeq);
+    lcdCommandList(initSeq);                    // initialization commands to the display
+    lcdSetRotation(0);                          // set display rotaiton and size defaults
 }
 
 /*------------------------------------------------
- * setAddrWindow()
+ * lcdSetAddrWindow()
  *
  *  set LCD window size in pixes from top left to bottom right
  *  and setup for write to LCD RAM frame buffer
  *  any sunsequent write commands will go to RAN and be frawn on the display
  *
  */
-void setAddrWindow(unsigned char x0, unsigned char y0, unsigned char x1, unsigned char y1)
+void lcdSetAddrWindow(unsigned char x0, unsigned char y0, unsigned char x1, unsigned char y1)
 {
     lcdWriteCommand(ST7735_CASET);              // Column addr set
     lcdWriteData(0x00);
@@ -302,42 +299,42 @@ void setAddrWindow(unsigned char x0, unsigned char y0, unsigned char x1, unsigne
 }
 
 /*------------------------------------------------
- * pushColor()
+ * lcdPushColor()
  *
  *  send  color pixel to LCD,
- *  must run after setAddrWindow()
+ *  must run after lcdSetAddrWindow()
  *
  */
-void pushColor(unsigned int color)
+void lcdPushColor(unsigned int color)
 {
     lcdWriteData((unsigned char) (color >> 8));
     lcdWriteData((unsigned char) color);
 }
 
 /*------------------------------------------------
- * drawPixel()
+ * lcdDrawPixel()
  *
  *  drow a pixes in coordinate (x,y) with color
  *
  */
-void drawPixel(int x, int y, unsigned int color)
+void lcdDrawPixel(int x, int y, unsigned int color)
 {
     if ((x < 0) || (x >= _width) || (y < 0) || (y >= _height))
         return;
 
-    setAddrWindow(x,y,x+1,y+1);
+    lcdSetAddrWindow(x,y,x+1,y+1);
   
     lcdWriteData((unsigned char) (color >> 8));
     lcdWriteData((unsigned char) color);
 }
 
 /*------------------------------------------------
- * drawFastVLine()
+ * lcdDrawFastVLine()
  *
  *  draw vertical line from x,y length h and color
  *
  */
-void drawFastVLine(int x, int y, int h, unsigned int color)
+void lcdDrawFastVLine(int x, int y, int h, unsigned int color)
 {
     unsigned char     hi, lo;
 
@@ -348,7 +345,7 @@ void drawFastVLine(int x, int y, int h, unsigned int color)
     if ((y+h-1) >= _height)
         h = _height-y;
 
-    setAddrWindow(x, y, x, y+h-1);
+    lcdSetAddrWindow(x, y, x, y+h-1);
 
     hi = (unsigned char) (color >> 8);
     lo = (unsigned char) color;
@@ -361,12 +358,12 @@ void drawFastVLine(int x, int y, int h, unsigned int color)
 }
 
 /*------------------------------------------------
- * drawFastHLine()
+ * lcdDrawFastHLine()
  *
  *  draw horizontal line from x,y with length w and color
  *
  */
-void drawFastHLine(int x, int y, int w, unsigned int color)
+void lcdDrawFastHLine(int x, int y, int w, unsigned int color)
 {
     unsigned char     hi, lo;
 
@@ -377,7 +374,7 @@ void drawFastHLine(int x, int y, int w, unsigned int color)
     if ((x+w-1) >= _width)
         w = _width-x;
 
-    setAddrWindow(x, y, x+w-1, y);
+    lcdSetAddrWindow(x, y, x+w-1, y);
 
     hi = (unsigned char) (color >> 8);
     lo = (unsigned char) color;
@@ -391,23 +388,23 @@ void drawFastHLine(int x, int y, int w, unsigned int color)
 
 
 /*------------------------------------------------
- * fillScreen()
+ * lcdFillScreen()
  *
  *  fill screen with solid color
  *
  */
-void fillScreen(unsigned int color)
+void lcdFillScreen(unsigned int color)
 {
-    fillRect(0, 0,  _width, _height, color);
+    lcdFillRect(0, 0,  _width, _height, color);
 }
 
 /*------------------------------------------------
- * fillRect()
+ * lcdFillRect()
  *
  *  draw a filled rectangle with solid color
  *
  */
-void fillRect(int x, int y, int w, int h, unsigned int color)
+void lcdFillRect(int x, int y, int w, int h, unsigned int color)
 {
     unsigned char     hi, lo;
 
@@ -421,7 +418,7 @@ void fillRect(int x, int y, int w, int h, unsigned int color)
     if ((y + h - 1) >= _height)
         h = _height - y;
 
-    setAddrWindow(x, y, x+w-1, y+h-1);
+    lcdSetAddrWindow(x, y, x+w-1, y+h-1);
 
     hi = (unsigned char) (color >> 8);
     lo = (unsigned char) color;
@@ -448,93 +445,51 @@ unsigned int lcdColor565(unsigned char r, unsigned char g, unsigned char b)
 }
 
 /*------------------------------------------------
- * setRotation()
+ * lcdSetRotation()
  *
  *  screen rotation
  *
  */
-#define     MADCTL_MY   0x80
-#define     MADCTL_MX   0x40
-#define     MADCTL_MV   0x20
-#define     MADCTL_ML   0x10
-#define     MADCTL_RGB  0x00
-#define     MADCTL_BGR  0x08
-#define     MADCTL_MH   0x04
-
-void setRotation(unsigned char m)                     // *** room for improvement by removing code for LCD tab models other than green ***
+void lcdSetRotation(unsigned char m)
 {
     lcdWriteCommand(ST7735_MADCTL);
-    rotation = m % 4;                           // can't be higher than 3
+    if ( m > 3 )
+        return;
     switch (rotation)
     {
     case 0:
-        if (tabcolor == INITR_BLACKTAB)
-            lcdWriteData(MADCTL_MX | MADCTL_MY | MADCTL_RGB);
-        else
-            lcdWriteData(MADCTL_MX | MADCTL_MY | MADCTL_BGR);
-     
+        lcdWriteData(MADCTL_MX | MADCTL_MY | MADCTL_RGB);
         _width  = ST7735_TFTWIDTH;
-
-        if (tabcolor == INITR_144GREENTAB) 
-            _height = ST7735_TFTHEIGHT_144;
-        else
-            _height = ST7735_TFTHEIGHT_18;
+        _height = ST7735_TFTHEIGHT;
         break;
 
     case 1:
-        if (tabcolor == INITR_BLACKTAB)
-            lcdWriteData(MADCTL_MY | MADCTL_MV | MADCTL_RGB);
-        else
-            lcdWriteData(MADCTL_MY | MADCTL_MV | MADCTL_BGR);
-
-        if (tabcolor == INITR_144GREENTAB) 
-            _width = ST7735_TFTHEIGHT_144;
-        else
-            _width = ST7735_TFTHEIGHT_18;
-
+        lcdWriteData(MADCTL_MY | MADCTL_MV | MADCTL_RGB);
+        _width = ST7735_TFTHEIGHT;
         _height = ST7735_TFTWIDTH;
-
          break;
 
     case 2:
-        if (tabcolor == INITR_BLACKTAB)
-            lcdWriteData(MADCTL_RGB);
-        else
-            lcdWriteData(MADCTL_BGR);
-
+        lcdWriteData(MADCTL_RGB);
         _width  = ST7735_TFTWIDTH;
-
-        if (tabcolor == INITR_144GREENTAB) 
-            _height = ST7735_TFTHEIGHT_144;
-        else
-            _height = ST7735_TFTHEIGHT_18;
-
+        _height = ST7735_TFTHEIGHT;
         break;
 
     case 3:
-        if (tabcolor == INITR_BLACKTAB)
-            lcdWriteData(MADCTL_MX | MADCTL_MV | MADCTL_RGB);
-        else
-            lcdWriteData(MADCTL_MX | MADCTL_MV | MADCTL_BGR);
-
-        if (tabcolor == INITR_144GREENTAB) 
-            _width = ST7735_TFTHEIGHT_144;
-        else
-            _width = ST7735_TFTHEIGHT_18;
-
+        lcdWriteData(MADCTL_MX | MADCTL_MV | MADCTL_RGB);
+        _width = ST7735_TFTHEIGHT;
         _height = ST7735_TFTWIDTH;
-
         break;
     }
 }
 
 /*------------------------------------------------
- * invertDisplay()
+ * lcdInvertDisplay()
  *
  *  inverse screen colors
  *
  */
-void invertDisplay(int i)
+void lcdInvertDisplay(int i)
 {
     lcdWriteCommand(i ? ST7735_INVON : ST7735_INVOFF);
 }
@@ -560,3 +515,69 @@ int lcdWidth(void)
 {
     return _width;
 }
+
+/*------------------------------------------------
+ * lcdFrameBufferInit()
+ *
+ *  initialize a frame buffer with a color
+ *
+ */
+unsigned char* lcdFrameBufferInit(unsigned int color)
+{
+    unsigned char*  buffer;
+    unsigned int    size;
+    unsigned int    i;
+
+    size = _width * _height * sizeof(unsigned int);         // calculate buffer size
+
+    if ( (buffer = (unsigned char*) malloc(size)) == 0 )    // allocate memory and abort if cannot
+        return 0;
+
+    for ( i = 0; i < size; i += 2)                          // initialize buffer with color
+    {
+        buffer[i] = (unsigned char) (color >> 8);           // swap bytes in buffer
+        buffer[i+1] = (unsigned char) color;                // so that writes yield correct order
+    }
+
+    return buffer;
+}
+
+/*------------------------------------------------
+ * lcdFrameBufferFree()
+ *
+ *  release memory reserved for the frame buffer
+ *
+ */
+void lcdFrameBufferFree(unsigned char* frameBufferPointer)
+{
+    free((void*) frameBufferPointer);                       // free buffer memory
+}
+
+/*------------------------------------------------
+ * lcdFrameBufferPush()
+ *
+ *  tranfer frame buffer to LCD using DMA
+ *  and call optional call-back function on completion
+ *
+ */
+int lcdFrameBufferPush(unsigned char* frameBufferPointer, void(*completionCallBack)(void))
+{
+    unsigned int    size;
+
+    size = _width * _height * sizeof(unsigned int);                                 // calculate frame buffer size
+    lcdSetAddrWindow(0, 0, _width-1, _height-1);                                    // prepare display area
+    return spiWriteBlock(LCD_DATA, frameBufferPointer, size, completionCallBack);   // push buffer data
+}
+
+/*------------------------------------------------
+ * lcdFrameBufferScroll()
+ *
+ *  scroll frame buffer by +/- pixels and
+ *  fill new lines with color
+ *
+ */
+void lcdFrameBufferScroll(int pixels, unsigned int color)
+{
+}
+
+
