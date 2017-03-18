@@ -41,6 +41,8 @@ typedef enum                                    // valid devices supported
 void spiIoInit(void);                           // call once to initialize IO
 int  spiReadByte(spiDevice_t, unsigned char*);  // read a byte from a device
 int  spiWriteByte(spiDevice_t, unsigned char);  // write a byte to a device
+int  spiReadByteKeepCS(spiDevice_t, unsigned char*);  // read a byte from a device and keep CS asserted (active)
+int  spiWriteByteKeepCS(spiDevice_t, unsigned char);  // write a byte to a device and keep CS asserted (active)
                                                 // read/write a block of data into/out-of buffer location of certain size, at completion call a callback function
 int  spiReadBlock(spiDevice_t, unsigned char*, unsigned int, void(*)(void));
 int  spiWriteBlock(spiDevice_t, unsigned char*, unsigned int, void(*)(void));

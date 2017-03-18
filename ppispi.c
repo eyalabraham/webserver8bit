@@ -227,9 +227,59 @@ void spiIoInit(void)
  *  function blocks until read byte is ready or times-out
  *
  */
+int spiReadByte(spiDevice_t device, unsigned char* data)
+{
+    return spiReadByteEx(device, data, 0);
+}
+
+/*------------------------------------------------
+ * spiWriteByte()
+ *
+ *  write a byte to a device
+ *  block until AVR acknowledges write to it
+ *
+ */
+int spiWriteByte(spiDevice_t device, unsigned char data)
+{
+    return spiWriteByteEx(device, data, 0);
+}
+
+/*------------------------------------------------
+ * spiReadByteKeepCS()
+ *
+ *  read a byte from a device and keep CS asserted (active)
+ *  the read action is triggered by a device selection
+ *  function blocks until read byte is ready or times-out
+ *
+ */
+int spiReadByteKeepCS(spiDevice_t device, unsigned char* data)
+{
+    return spiReadByteEx(device, data, 1);
+}
+
+/*------------------------------------------------
+ * spiWriteByteKeepCS()
+ *
+ *  write a byte to a device and keep CS asserted (active)
+ *  block until AVR acknowledges write to it
+ *
+ */
+int spiWriteByteKeepCS(spiDevice_t device, unsigned char data)
+{
+    return spiWriteByteEx(device, data, 1);
+}
+
+/*------------------------------------------------
+ * spiReadByteEx()
+ *
+ *  read a byte from a device
+ *  the read action is triggered by a device selection
+ *  function blocks until read byte is ready or times-out
+ *
+ */
 #define     COUNT_OUT   30000
 
-int spiReadByte(spiDevice_t device, unsigned char* data)
+static int spiReadByteEx(spiDevice_t device, unsigned char* data, int keepCS)
 {
     unsigned int    i = 0;
     int             nReturn;
@@ -240,7 +290,7 @@ int spiReadByte(spiDevice_t device, unsigned char* data)
 	if ( inp(PPIPC) & IBF )						// exit with error if IBF is 'hi'
 		return SPI_RD_ERR;						// something went wrong and input buffer has unread data
 
-    if ( activeDevice == NONE )
+    if ( activeDevice == NONE || activeDevice == device )
     {
         spiDevSelect(device);                   // select a device, which causes the AVR to initiate a read to the device
 
@@ -255,7 +305,8 @@ int spiReadByte(spiDevice_t device, unsigned char* data)
             }
         }
 
-        spiDevSelect(NONE);                     // deselect the device so that no more reads are initiate on SPI bus (see AVR code in par2spi.c)
+        if (!keepCS)
+            spiDevSelect(NONE);                 // deselect the device so that no more reads are initiate on SPI bus (see AVR code in par2spi.c)
 
         *data = (unsigned char) inp(PPIPA);     // read the data from the 8255 buffer
 
@@ -271,13 +322,13 @@ SPIRD_TOUT:
 }
 
 /*------------------------------------------------
- * spiWriteByte()
+ * spiWriteByteEx()
  *
  *  write a byte to a device
  *  block until AVR acknowledges write to it
  *
  */
-int spiWriteByte(spiDevice_t device, unsigned char data)
+static int spiWriteByteEx(spiDevice_t device, unsigned char data, int keepCS)
 {
     unsigned char   select;
     int             nReturn;
@@ -285,14 +336,15 @@ int spiWriteByte(spiDevice_t device, unsigned char data)
     if ( device == ETHERNET_RD || device == SD_CARD_RD )
         return SPI_IO_DIR_ERR;
 
-    if ( activeDevice == NONE )
+    if ( activeDevice == NONE || activeDevice == device )
     {
         spiDevSelect(device);                   // select a device
 
         while ( !(inp(PPIPC) & OBF) ) {}        // if OBF^ is '1' then we can write out the data byte
         outp(PPIPA, data);                      // output data byte
 
-        spiDevSelect(NONE);                     // deselect the device
+        if (!keepCS)
+            spiDevSelect(NONE);                 // deselect the device
 
         nReturn = SPI_OK;
     }
