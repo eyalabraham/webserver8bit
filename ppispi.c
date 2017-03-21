@@ -377,7 +377,7 @@ int spiReadBlock(spiDevice_t device, unsigned char* inputBuffer, unsigned int co
     if ( count == 1 )                           // if count is '1' don't use DMA transfer
         return spiReadByte(device, inputBuffer);
 
-    if ( activeDevice == NONE )
+    if ( activeDevice == NONE || activeDevice == device )
     {
         nSpiReadBlock = 1;                      // flag as a read operation
 
@@ -430,7 +430,7 @@ int spiWriteBlock(spiDevice_t device, unsigned char* outputBuffer, unsigned int 
     if ( count == 1 )                           // if count is '1' don't use DMA transfer
         return spiWriteByte(device, *outputBuffer);
 
-    if ( activeDevice == NONE )
+    if ( activeDevice == NONE || activeDevice == device )
     {
         nSpiReadBlock = 0;                      // flag as a write operation
 
