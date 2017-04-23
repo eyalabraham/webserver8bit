@@ -1,0 +1,49 @@
+
+include/            - project include directory
+                      header file for the project, including lwIP header files
+
+lwip/               - ipIP core files
+
+FILES               - this file
+
+README              - project RERADME file
+
+_lmte.asm           - Large memory model Multi-task Executive assembly code
+                      contains the core routines for task swap and preemption
+
+lmte.c              - Large memory model Multi-task Executive library function
+                      setup and management of the LMTE framework
+
+ppispi.c            - driver code for parallel port PPI 8255 to SPI (AVR ATmega328p interface)
+
+st7735.c            - driver code for SaintSmart 2.4"LCD based on ST7735 controller
+
+t_dummy.c           - dummy task for testing
+
+t_task.c            - task template code
+
+t_term.c            - serial terminal task
+
+ws.c                - web server main/startup module
+
+xprintf.c           - custom thread-safe printf() library
+
+ethtest.c           - ENC28J60 / lwIP test program
+
+spitest.c           - PPI 8255 to SPI test program
+
+ser1loop.c          - v25 FlashLite board serial-1 loopback test program
+
+web-server-notes    - projects notes
+
+wlink.lnk           - WATCOM linker file
+                      empty file  to satisfy linker execution requirements
+
+logparse.awk        - LMTE message log parser
+
+Makefile            - project Make file
+
+aardvark.py         - TotalPhase AARDVARK utility script to control remote power and reset gadget
+
+c2asm.sh            - C source to assembly converter based on WATCOM compiler tools
+

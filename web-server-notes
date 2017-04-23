@@ -181,42 +181,54 @@ D0..D7  <------>| D0..D7   PB0..PB7 |------------->    PB0..PB2  FSEL0..FSEL2
           1           1           0           1           1           1            1        - Read AVR status
           1           1           1           1           1           1            1        - Write AVR command
 
-
 ======================================================
- PC-XT, 8086 CPU board option
+ Ethernet interface: ENC28J60 + lwIP stack
 ======================================================
 
-1. Reuse PC-XT 8255 interface for SD card and Ethernet instead of IDE interface.
-2. Split 8255 to Mode 0 port B and Mode 2 port A, with port C serving as hand shake lines
-3. Rewrite BIOS to handle Disk IO INT through new setup above to SD card
-   SD card can be populated/written on a PC -> saves dev time!
-4. Update Minix distro with Ethernet driver and enable network processes
+ENC28J60 wired in paralle with the LCD to the AVR.
+Using interface library 'ppispi.c' to drive data in and out of the serial interface built from PPI 8255 + AVR ATmega328p.
+Library uses single byte functions and the NEC V25 CPU's DMA controller for block transfers.
 
-Interfacing SD card with parallel IO interface
-------------------------------------------------------
+IP stack is based on lwIP stack (https://savannah.nongnu.org/projects/lwip/)
 
-SD card connects with SPI to AVR 328P that connects through 8255 Mode 1, also can be done with Mode 2.
-However, Mode 2 can only be used on one 8255 bank. So use Mode 0 for AVR (to SD card) and Mode 2 for Ethernet (see below)
+    lwIP
+----------------------------
+    Implement the following protocols:
+    -   IPv4 only
+    -   UDP
+    -   TCP
+    -   ARP
+    -   DHCP
+    -   ICMP
+    -   IGMP, not sure?
 
-Use two AVRs, one for SD interface and one for Ethernet:
-- SD interface AVR 328P (connect to Mode-0 8255 port B bank) – PB is IO, PC0..2 two hand shake lines + RD/WR
-- 8255 Mode 0 port B bank will switch between ‘output’ and ‘input’ modes
-- AVR Port D PD0..7 for data transfer
-- SPI interface for SD card SCLK/MISO/MOSI
-- Dual function with programming – need to remove SD card while programming AVR
-- AVR PB6 for SD card CS
-- AVR PB0  and PB1, for parallel hand shake lines OBF/Ack (OBF can trigger AVR interrupt) or STB/IBF (interrupt trigger?) --> will need to manually bit-bang these functions from the 8255 so that we have enough IO lines left to also implement a ‘read’/’write’ direction. Otherwise we automatically get an interrupt line that I don’t need for the CPU
-- Will need to include a 74245 bi directional buffer between AVR and 8255
-- PB2 set ‘read’ or ‘write’ SD modes (use extra PCx lines on 8255)
-- Can use interrupt only on the AVR side when CPU writes to the SD card?
-- Use polled IO for CPU to AVR/SD
+lwIP stack options
+----------------------------
+    - lwipopts.h (http://lwip.wikia.com/wiki/Lwipopts.h)
+      most of the below list are conditional in netif.h
+        options to disable:
+            LWIP_LOOPBACK_MAX_PBUFS     ; no need
+            ENABLE_LOOPBACK             ; no need
+            LWIP_NETIF_HWADDRHINT       ; no need
+            MIB2_STATS                  ; no need
+            LWIP_IPV6                   ; not doing IPv6
+            LWIP_NETIF_REMOVE_CALLBACK  ; not implementing removal of interface, always present
+            ETH_PAD_SIZE                ; using ENC28J60 hardware padding
+        options to enable:
+            NO_SYS                      ; set to 1
+            LWIP_IPV4                   ; implementing only IPv4
+            LWIP_NETIF_HOSTNAME         ; want to include host name string identification
+            LWIP_DHCP                   ; enable dhcp module
+        options to review:
+            LWIP_IGMP                   ; what is IGMP?
+            LWIP_NETIF_LINK_CALLBACK    ; how to identify link state change?
+            LWIP_NETIF_STATUS_CALLBACK  ; probably ot unless I can track state change through IRQ
+            
+    ? ARP options?  size of the ARP table, how packets are queued, if the ARP code should learn MAC-IP address bindings
 
-Ethernet interface
-------------------------------------------------------
-
-Ethernet chip to AVR 328P that connects to a Mode 2 8255 port bank
-PA is IO, PC3..7 hand shake
-
+ENC28J60 interface
+----------------------------
+    + resource (http://lwip.wikia.com/wiki/Writing_a_device_driver)
 
 ======================================================
  Notes on memory models

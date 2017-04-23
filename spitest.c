@@ -10,7 +10,7 @@
 #include    <string.h>
 #include    <assert.h>
 #include    <conio.h>
-#include    <i86.h>
+//#include    <i86.h>
 #include    <dos.h>
 
 #include    "ppispi.h"                          // 8255 PPI to AVR/SPI driver

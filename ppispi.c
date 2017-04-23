@@ -91,6 +91,12 @@
 #define     DMA0_INT_MASK   0x40                // DIC0: interrupt mask bit
 
 /* -----------------------------------------
+   forward function definitions
+----------------------------------------- */
+static int spiReadByteEx(spiDevice_t, unsigned char*, int);
+static int spiWriteByteEx(spiDevice_t, unsigned char, int);
+
+/* -----------------------------------------
    globals
 ----------------------------------------- */
 static spiDevice_t      activeDevice = NONE;    // active device flag
@@ -114,7 +120,9 @@ static void spiDevSelect(spiDevice_t device)
 
     select = (inp(PPIPB) & ~DEV_BIT_MASK) | (device & DEV_BIT_MASK);
     outp(PPIPB, select);
-    activeDevice = device;
+
+    if ( device != KEEP_CS )                    // don't change active device if selection is KEEP_CS
+        activeDevice = device;
 }
 
 /*------------------------------------------------
@@ -290,7 +298,9 @@ static int spiReadByteEx(spiDevice_t device, unsigned char* data, int keepCS)
 	if ( inp(PPIPC) & IBF )						// exit with error if IBF is 'hi'
 		return SPI_RD_ERR;						// something went wrong and input buffer has unread data
 
-    if ( activeDevice == NONE || activeDevice == device )
+    if ( activeDevice == NONE ||
+         activeDevice == device ||
+         (activeDevice == ETHERNET_WR && device == ETHERNET_RD) )   // allow ethenet reads after a (command) write
     {
         spiDevSelect(device);                   // select a device, which causes the AVR to initiate a read to the device
 
@@ -305,8 +315,10 @@ static int spiReadByteEx(spiDevice_t device, unsigned char* data, int keepCS)
             }
         }
 
-        if (!keepCS)
-            spiDevSelect(NONE);                 // deselect the device so that no more reads are initiate on SPI bus (see AVR code in par2spi.c)
+        if ( keepCS )                           // deselect the device so that no more reads are initiate on SPI bus (see AVR code in par2spi.c)
+            spiDevSelect(KEEP_CS);              // determine if we need to leave CS asserted
+        else
+            spiDevSelect(NONE);
 
         *data = (unsigned char) inp(PPIPA);     // read the data from the 8255 buffer
 
@@ -336,15 +348,18 @@ static int spiWriteByteEx(spiDevice_t device, unsigned char data, int keepCS)
     if ( device == ETHERNET_RD || device == SD_CARD_RD )
         return SPI_IO_DIR_ERR;
 
-    if ( activeDevice == NONE || activeDevice == device )
+    if ( activeDevice == NONE ||
+         activeDevice == device )
     {
         spiDevSelect(device);                   // select a device
 
         while ( !(inp(PPIPC) & OBF) ) {}        // if OBF^ is '1' then we can write out the data byte
         outp(PPIPA, data);                      // output data byte
 
-        if (!keepCS)
-            spiDevSelect(NONE);                 // deselect the device
+        if ( keepCS )                           // deselect the device so that no more write are expected on SPI bus (see AVR code in par2spi.c)
+            spiDevSelect(KEEP_CS);              // determine if we need to leave CS asserted
+        else
+            spiDevSelect(NONE);
 
         nReturn = SPI_OK;
     }
@@ -377,7 +392,9 @@ int spiReadBlock(spiDevice_t device, unsigned char* inputBuffer, unsigned int co
     if ( count == 1 )                           // if count is '1' don't use DMA transfer
         return spiReadByte(device, inputBuffer);
 
-    if ( activeDevice == NONE || activeDevice == device )
+    if ( activeDevice == NONE ||
+         activeDevice == device ||
+         (activeDevice == ETHERNET_WR && device == ETHERNET_RD) )   // allow ethenet reads after a (command) write
     {
         nSpiReadBlock = 1;                      // flag as a read operation
 
@@ -430,7 +447,8 @@ int spiWriteBlock(spiDevice_t device, unsigned char* outputBuffer, unsigned int 
     if ( count == 1 )                           // if count is '1' don't use DMA transfer
         return spiWriteByte(device, *outputBuffer);
 
-    if ( activeDevice == NONE || activeDevice == device )
+    if ( activeDevice == NONE ||
+         activeDevice == device )
     {
         nSpiReadBlock = 0;                      // flag as a write operation
 
