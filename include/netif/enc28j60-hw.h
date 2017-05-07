@@ -15,9 +15,16 @@
    global definitions
 ----------------------------------------- */
 
-#define     PACKET_BUFFER       1522            // size of temporary packet buffer
+#define     FULL_DUPLEX         1               // set to 0 for half-duplex setup
+
+#define     HIGH_BYTE(x)        ((u8_t) ((u16_t)(x) >> 8))
+#define     LOW_BYTE(x)         ((u8_t) ((u16_t)(x)))
+
+#define     PACKET_BUFFER       2048            // size of temporary packet buffer
 #define     TOTAL_RAM           8192            // in Bytes
 #define     USE_CURR_ADD        0xffff          // use current address pointed by ERDPT or EWRPT
+#define     PHY_ID1             0x0083          // PHY IDs for verification
+#define     PHY_ID2             0x1400
 
 #define     OP_RCR              0x00            // Read Control Register opcode
 #define     OP_RBM              0x3a            // Read Buffer Memory opcode
@@ -42,6 +49,8 @@
 #define     MACON3_PADCFG       0xa0
 #define     MACON3_FULDPX       0x01
 #define     PHCON1_PDPXMD       0x0100          // must match MACON3_FULDPX setting
+#define     PHCON1_PLOOPBK      0x4000
+#define     PHCON2_HDLDIS       0x0100
 #define     PHSTAT2_LSTAT       0x0400
 #define     PHSTAT1_LLSTAT      0x0004
 #define     ECON1_RXEN          0x04
@@ -56,28 +65,24 @@
 /* -----------------------------------------
     ENC28J60 initialization parameters
 ----------------------------------------- */
-#define     INIT_ERXSTL         0x00            // receive buffer start 0x0000
-#define     INIT_ERXSTH         0x00
-#define     INIT_ERXNDL         0xff            // receive buffer end 0x13ff (5K byte)
-#define     INIT_ERXNDH         0x13
-#define     INIT_ERXRDPTL       INIT_ERXSTL     // receiver read pointer 0x0000
-#define     INIT_ERXRDPTH       INIT_ERXSTH
-#define     INIT_ERXWRPTL       INIT_ERXSTL     // receiver write pointer 0x00
-#define     INIT_ERXWRPTH       INIT_ERXSTH
-#define     INIT_ERDPTL         INIT_ERXSTL     // receiver read pointer
-#define     INIT_ERDPTH         INIT_ERXSTH
+#define     INIT_ERXST          0x0000          // receive buffer start 0x0000
+#define     INIT_ERXND          0x13ff          // receive buffer end 0x13ff (5K byte)
+#define     INIT_ERXRDPT        INIT_ERXST      // receiver read pointer 0x0000
+#define     INIT_ERXWRPT        INIT_ERXST      // receiver write pointer 0x0000
+#define     INIT_ERDPT          INIT_ERXST      // receiver read pointer
 
-#define     INIT_ETXSTL         0x00            // transmit buffer start 0x1500
-#define     INIT_ETXSTH         0x15
-#define     INIT_EWRPTL         INIT_ETXSTL+1   // transmitter write pointer, one byte after PER_PACK_CTRL location
-#define     INIT_EWRPTH         INIT_ETXSTH
+#define     INIT_ETXST          0x1500          // transmit buffer start 0x1500
+#define     INIT_EWRPT          INIT_ETXST+1    // transmitter write pointer, one byte after PER_PACK_CTRL location
 
-#define     INIT_ERXFCON        0xa3            // see section 8.0 RECEIVE FILTERS, pg.49
+#define     INIT_ERXFCON        0xa0            // see section 8.0 RECEIVE FILTERS, pg.49
 
-#define     INIT_MAMXFLL        0x05            // max frame size of 1518 bytes
-#define     INIT_MAMXFLH        0xee
+#define     INIT_MAMXFL         1518            // max frame size of 1518 bytes
 
+#if FULL_DUPLEX
 #define     INIT_MABBIPG        0x15            // transmistion packet gap definitions
+#else
+#define     INIT_MABBIPG        0x12            // transmistion packet gap definitions
+#endif
 #define     INIT_MAIPGL         0x12
 #define     INIT_MAIPGH         0x0C
 
@@ -155,13 +160,13 @@ typedef enum {
     EPMCSH   = 0x11 | BANK1,
     EPMOL    = 0x14 | BANK1,
     EPMOH    = 0x15 | BANK1,
-    EWOLIE   = 0x16 | BANK1,
-    EWOLIR   = 0x17 | BANK1,
+    EWOLIE   = 0x16 | BANK1,                    // @@ marked "Reserved' in DS39662E
+    EWOLIR   = 0x17 | BANK1,                    // @@ marked "Reserved' in DS39662E
     ERXFCON  = 0x18 | BANK1,
 	EPKTCNT  = 0x19 | BANK1,
 
     MACON1   = 0x00 | BANK2 | MACMII,
-    MACON2   = 0x01 | BANK2 | MACMII,
+    MACON2   = 0x01 | BANK2 | MACMII,           // @@ marked "Reserved' in DS39662E
     MACON3   = 0x02 | BANK2 | MACMII,
     MACON4   = 0x03 | BANK2 | MACMII,
     MABBIPG  = 0x04 | BANK2 | MACMII,
@@ -171,8 +176,8 @@ typedef enum {
     MACLCON2 = 0x09 | BANK2 | MACMII,
     MAMXFLL  = 0x0A | BANK2 | MACMII,
     MAMXFLH  = 0x0B | BANK2 | MACMII,
-    MAPHSUP  = 0x0D | BANK2 | MACMII,
-    MICON    = 0x11 | BANK2 | MACMII,
+    MAPHSUP  = 0x0D | BANK2 | MACMII,           // @@ marked "Reserved' in DS39662E
+    MICON    = 0x11 | BANK2 | MACMII,           // @@ marked "Reserved' in DS39662E
     MICMD    = 0x12 | BANK2 | MACMII,
     MIREGADR = 0x14 | BANK2 | MACMII,
     MIWRL    = 0x16 | BANK2 | MACMII,

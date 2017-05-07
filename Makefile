@@ -58,7 +58,7 @@ LINKDBG =
 endif
 
 #CCOPT = -0 -ml $(CCDBG) -zu -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
-CCOPT = -0 -ml $(CCDBG) -zu -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
+CCOPT = -0 -ml $(CCDBG) -zu -s -zp1 -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
 ASMOPT = -0 -ml $(ASMDBG)
 SERLOOPLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
@@ -75,6 +75,7 @@ SPITESTLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
 ETHTESTLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
                  FORMAT DOS                               \
+                 OPTION STACK=16k                         \
                  OPTION MAP=ethtest                       \
                  OPTION ELIMINATE
 

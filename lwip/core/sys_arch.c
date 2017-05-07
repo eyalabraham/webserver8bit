@@ -13,10 +13,7 @@
 #include    "arch/sys_arch.h"
 
 #ifdef  SYSTEM_DOS
-
 #include    <dos.h>
-struct dostime_t    sysTime;                    // hold system time for timeout calculations
-u32_t               dosTimetic;                 // DOS time tick temp
 #endif
 
 #ifdef  SYSTEM_LMTE
@@ -32,7 +29,6 @@ u32_t               dosTimetic;                 // DOS time tick temp
 void sys_init(void)
 {
 #ifdef  SYSTEM_DOS
-    dosTimetic = (u32_t) sysTime.hsecond;       // DOS is only 1/100 second resolution!
 #endif  /* SYSTEM_DOS */
 #ifdef  SYSTEM_LMTE
 #endif  /* SYSTEM_LMTE */
@@ -91,6 +87,9 @@ void sys_arch_unprotect(sys_prot_t pval)
 u32_t sys_now(void)
 {
 #ifdef  SYSTEM_DOS
+    struct dostime_t    sysTime;                // hold system time for timeout calculations
+    u32_t               dosTimetic;             // DOS time tick temp
+
     _dos_gettime(&sysTime);                     // get system time
     dosTimetic = (u32_t) sysTime.hsecond +
                  (u32_t) (100 * sysTime.second) +

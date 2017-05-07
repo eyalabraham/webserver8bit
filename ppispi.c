@@ -72,6 +72,8 @@
 #define     INTE2_SET       outp(PPICNT,0x09)
 #define     INTE2_CLEAR     outp(PPICNT,0x08)
 
+#define     SPI_IO_RETRY    10                  // number of retries for an SPI IO
+
 // NEC v25 interrupt and IO definitions for
 // DMA channel-0
 #define     DMAC0_VEC       20                  // DMA channel 0 interrupt vector
@@ -285,11 +287,9 @@ int spiWriteByteKeepCS(spiDevice_t device, unsigned char data)
  *  function blocks until read byte is ready or times-out
  *
  */
-#define     COUNT_OUT   30000
-
 static int spiReadByteEx(spiDevice_t device, unsigned char* data, int keepCS)
 {
-    unsigned int    i = 0;
+    int             i = 0;
     int             nReturn;
 
     if ( !(device == ETHERNET_RD || device == SD_CARD_RD) )
@@ -300,18 +300,17 @@ static int spiReadByteEx(spiDevice_t device, unsigned char* data, int keepCS)
 
     if ( activeDevice == NONE ||
          activeDevice == device ||
-         (activeDevice == ETHERNET_WR && device == ETHERNET_RD) )   // allow ethenet reads after a (command) write
+         (activeDevice == ETHERNET_WR && device == ETHERNET_RD) )   // allow ethernet reads after a (command) write
     {
         spiDevSelect(device);                   // select a device, which causes the AVR to initiate a read to the device
 
         while ( !(inp(PPIPC) & IBF) )           // wait for IBF to go high after AVR sends data and STB^
         {
             i++;                                // crude time-out
-            if ( i == COUNT_OUT )
+            if ( i == SPI_IO_RETRY )
             {
                 spiDevSelect(NONE);
-                nReturn = SPI_ERR_RX_TIMEOUT;
-                goto SPIRD_TOUT;
+                return SPI_ERR_RX_TIMEOUT;
             }
         }
 
@@ -329,7 +328,6 @@ static int spiReadByteEx(spiDevice_t device, unsigned char* data, int keepCS)
         nReturn = SPI_BUSY;
     }
 
-SPIRD_TOUT:
     return nReturn;
 }
 
@@ -342,6 +340,7 @@ SPIRD_TOUT:
  */
 static int spiWriteByteEx(spiDevice_t device, unsigned char data, int keepCS)
 {
+    int             i = 0;
     unsigned char   select;
     int             nReturn;
 
@@ -353,7 +352,16 @@ static int spiWriteByteEx(spiDevice_t device, unsigned char data, int keepCS)
     {
         spiDevSelect(device);                   // select a device
 
-        while ( !(inp(PPIPC) & OBF) ) {}        // if OBF^ is '1' then we can write out the data byte
+        while ( !(inp(PPIPC) & OBF) )           // if OBF^ is '1' then we can write out the data byte
+        {
+            i++;                                // crude time-out
+            if ( i == SPI_IO_RETRY )
+            {
+                spiDevSelect(NONE);
+                return SPI_ERR_TX_TIMEOUT;
+            }
+        }
+
         outp(PPIPA, data);                      // output data byte
 
         if ( keepCS )                           // deselect the device so that no more write are expected on SPI bus (see AVR code in par2spi.c)
@@ -384,39 +392,45 @@ int spiReadBlock(spiDevice_t device, unsigned char* inputBuffer, unsigned int co
     unsigned long           dwLinearAddress;
 
     if ( !(device == ETHERNET_RD || device == SD_CARD_RD) )
+    {
+        spiDevSelect(NONE);                         // unselect device in case KeepCS was invokd before
         return SPI_IO_DIR_ERR;
+    }
 
-    if ( count == 0 )                           // exit with error if count is '0'
+    if ( count == 0 )                               // exit with error if count is '0'
+    {
+        spiDevSelect(NONE);
         return SPI_RD_ERR;
+    }
 
-    if ( count == 1 )                           // if count is '1' don't use DMA transfer
-        return spiReadByte(device, inputBuffer);
+    if ( count == 1 )                               // if count is '1' don't use DMA transfer
+        return spiReadByte(device, inputBuffer);    // this call will also release CS if it was previously asserted
 
     if ( activeDevice == NONE ||
          activeDevice == device ||
          (activeDevice == ETHERNET_WR && device == ETHERNET_RD) )   // allow ethenet reads after a (command) write
     {
-        nSpiReadBlock = 1;                      // flag as a read operation
+        nSpiReadBlock = 1;                          // flag as a read operation
 
-        callBack = spiCallBack;                 // save call back in a global variable
+        callBack = spiCallBack;                     // save call back in a global variable
 
-        INTE2_SET;                              // setup 8255 to generate interrupt on model-2 inputs
+        INTE2_SET;                                  // setup 8255 to generate interrupt on model-2 inputs
 
-                                                // pointer to 20-bit linear DMA address
+                                                    // pointer to 20-bit linear DMA address
         dwLinearAddress = (unsigned long) FP_SEG(inputBuffer) * 16 + (unsigned long) FP_OFF(inputBuffer);
 
-                                                // initialize DMA channel 0
+                                                    // initialize DMA channel 0
         pSfr->sar0  = 0;
         pSfr->sar0h = 0;
         pSfr->dar0  = (unsigned int) dwLinearAddress;
         pSfr->dar0h = (unsigned char) (dwLinearAddress >> 16);
         pSfr->tc0   = count - 1;
 
-        pSfr->dmac0 = DMA0_INC_DEST;            // increment memory destination address
-        pSfr->dic0 &= ~DMA0_INT_MASK;           // enable interrupt for DMA channel 0
-        pSfr->dmam0 = DMA0_IO_MEM + DMA0_ENABLE; // enable IO to memory single transfers
+        pSfr->dmac0 = DMA0_INC_DEST;                // increment memory destination address
+        pSfr->dic0 &= ~DMA0_INT_MASK;               // enable interrupt for DMA channel 0
+        pSfr->dmam0 = DMA0_IO_MEM + DMA0_ENABLE;    // enable IO to memory single transfers
 
-        spiDevSelect(device);                   // select device, AVR will start SPI reads
+        spiDevSelect(device);                       // select device, AVR will start SPI reads
 
         nReturn = SPI_OK;
     }
@@ -436,42 +450,60 @@ int spiReadBlock(spiDevice_t device, unsigned char* inputBuffer, unsigned int co
 int spiWriteBlock(spiDevice_t device, unsigned char* outputBuffer, unsigned int count, void (*spiCallBack)(void))
 {
     int                     nReturn;
+    int                     i = 0;
     unsigned long           dwLinearAddress;
 
     if ( device == ETHERNET_RD || device == SD_CARD_RD )
+    {
+        spiDevSelect(NONE);                         // unselect device in case KeepCS was invokd before
         return SPI_IO_DIR_ERR;
+    }
 
-    if ( count == 0 )                           // exit with error if count is '0'
+    if ( count == 0 )                               // exit with error if count is '0'
+    {
+        spiDevSelect(NONE);
         return SPI_WR_ERR;
+    }
 
-    if ( count == 1 )                           // if count is '1' don't use DMA transfer
-        return spiWriteByte(device, *outputBuffer);
+    if ( count == 1 )                               // if count is '1' don't use DMA transfer
+        return spiWriteByte(device, *outputBuffer); // this call will also release CS if it was previously asserted
 
     if ( activeDevice == NONE ||
          activeDevice == device )
     {
-        nSpiReadBlock = 0;                      // flag as a write operation
+        nSpiReadBlock = 0;                          // flag as a write operation
 
-        callBack = spiCallBack;                 // save call back in a global variable
+        callBack = spiCallBack;                     // save call back in a global variable
 
-        INTE1_SET;                              // setup 8255 to generate interrupt on mode-2 outputs
+        INTE1_SET;                                  // setup 8255 to generate interrupt on mode-2 outputs
 
-                                                // pointer to 20-bit linear DMA address
+                                                    // pointer to 20-bit linear DMA address
         dwLinearAddress = (unsigned long) FP_SEG(outputBuffer) * 16 + (unsigned long) FP_OFF(outputBuffer) + 1;
 
-                                                // initialize DMA channel 0
+                                                    // initialize DMA channel 0
         pSfr->sar0  = (unsigned int) dwLinearAddress;
         pSfr->sar0h = (unsigned char) (dwLinearAddress >> 16);
         pSfr->dar0  = 0;
         pSfr->dar0h = 0;
         pSfr->tc0   = (count - 1) - 1;
 
-        pSfr->dmac0 = DMA0_INC_SRC;             // increment memory source address
-        pSfr->dic0 &= ~DMA0_INT_MASK;           // enable interrupt for DMA channel 0
-        pSfr->dmam0 = DMA0_MEM_IO + DMA0_ENABLE; // enable memory to IO single transfers
+        pSfr->dmac0 = DMA0_INC_SRC;                 // increment memory source address
+        pSfr->dic0 &= ~DMA0_INT_MASK;               // enable interrupt for DMA channel 0
+        pSfr->dmam0 = DMA0_MEM_IO + DMA0_ENABLE;    // enable memory to IO single transfers
 
-        spiDevSelect(device);                   // select device
-        outp(PPIPA, *outputBuffer);             // initiate first byte write, ACKs from 8255 will trigger DMA transfers ...
+        spiDevSelect(device);                       // select device
+
+        while ( !(inp(PPIPC) & OBF) )               // if OBF^ is '1' then we can write out the data byte
+        {
+            i++;                                    // crude time-out
+            if ( i == SPI_IO_RETRY )
+            {
+                spiDevSelect(NONE);
+                return SPI_ERR_TX_TIMEOUT;
+            }
+        }
+
+        outp(PPIPA, *outputBuffer);                 // initiate first byte write, ACKs from 8255 will trigger DMA transfers ...
 
         nReturn = SPI_OK;
     }

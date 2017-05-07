@@ -45,9 +45,11 @@
  *
  */
 
-//#define     DRV_DEBUG
+//#define     DRV_DEBUG_FUNC_EXIT
+//#define     DRV_DEBUG_FUNC_NAME
+#define     DRV_DEBUG_FUNC_PARAM
 
-#ifdef DRV_DEBUG
+#if defined DRV_DEBUG_FUNC_EXIT || defined DRV_DEBUG_FUNC_NAME || defined DRV_DEBUG_FUNC_PARAM
 #include    <stdio.h>
 #endif
 
@@ -84,8 +86,8 @@
  */
 struct rxStat_t
 {
-    u8_t     nextPacketH;
     u8_t     nextPacketL;
+    u8_t     nextPacketH;
     u16_t    rxByteCount;
     u8_t     rxStatus1;
     u8_t     rxStatus2;
@@ -96,9 +98,8 @@ struct txStat_t
     u16_t   txByteCount;
     u8_t    txStatus1;
     u8_t    txStatus2;
-    u8_t    txStatus3;
     u16_t   txTotalXmtCount;
-    u8_t    txStatus4;
+    u8_t    txStatus3;
 };
 
 struct enc28j60_t
@@ -116,6 +117,7 @@ struct enc28j60_t
     struct eth_addr ethaddr;                            // MAC address, hard coded to what I need...
     u16_t           phyID1;                             // device ID
     u16_t           phyID2;
+    u8_t            revID;                              // silicone revision ID
 };
 
 /* -----------------------------------------
@@ -133,7 +135,7 @@ static int    setControlBit(ctrlReg_t, u8_t);
 static int    clearControlBit(ctrlReg_t, u8_t);
 
 // ENC28J60 device and memory access with block DMA
-static int    enc28j60Init(struct enc28j60_t*);
+static err_t  enc28j60Init(struct enc28j60_t*);
 static void   spiCallBack(void);
 static int    readMemBuffer(u8_t*, u16_t, u16_t);
 static int    writeMemBuffer(u8_t*, u16_t, u16_t);
@@ -144,7 +146,7 @@ static int    packetWaiting(void);
 static void   extractPacketInfo(struct enc28j60_t*);
 
 // LwIP stack functions
-static void   low_level_init(struct netif*);
+static err_t  low_level_init(struct netif*);
 static err_t  low_level_output(struct netif*, struct pbuf*);
 static struct pbuf* low_level_input(struct netif*);
 
@@ -152,7 +154,7 @@ static struct pbuf* low_level_input(struct netif*);
    driver globals
 ----------------------------------------- */
 volatile int dmaComplete;                       // DMA block IO completion flag
-u8_t     tempPacketBuffer[PACKET_BUFFER];       // temporary packet buffer @@ static allocation, should I opt for dynamic?
+u8_t         tempPacketBuffer[PACKET_BUFFER];   // temporary packet buffer @@ static allocation, should I opt for dynamic?
 
 /* -----------------------------------------
  * setRegisterBank()
@@ -175,13 +177,16 @@ static int setRegisterBank(regBank_t bank)
         spiWriteByteKeepCS(ETHERNET_WR, (OP_RCR | ECON1));  // read ECON1
         if ( (result = spiReadByte(ETHERNET_RD, &econ1Reg)) != SPI_OK )
             goto ABORT_BANKSEL;
-        econ1Reg &= 0x03;                                   // set bank number bits [BSEL1 BSEL0]
-        econ1Reg |= (bank >> 5);
+        econ1Reg &= 0xfc;                                   // set bank number bits [BSEL1 BSEL0]
+        econ1Reg |= (((u8_t)bank) >> 5);
         spiWriteByteKeepCS(ETHERNET_WR, (OP_WCR | ECON1));  // write ECON1
         spiWriteByte(ETHERNET_WR, econ1Reg);
     }
 
 ABORT_BANKSEL:
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("setRegisterBank(%d) %d\n", bank, result);
+#endif
     return result;                                          // bad bank number parameter passed in
 }
 
@@ -226,8 +231,8 @@ static int readControlRegister(ctrlReg_t reg, u8_t* byte)
     *byte = regValue;
 
 ABORT_RCR:
-#ifdef DRV_DEBUG
-    printf("readControlRegister(%d,0x%02x) %d\n", reg, *byte, result);
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("readControlRegister(0x%02x,0x%02x) %d\n", reg, *byte, result);
 #endif
     return result;
 }
@@ -247,7 +252,6 @@ static int writeControlRegister(ctrlReg_t reg, u8_t byte)
 {
     u8_t    bank;
     u8_t    regId;
-    u8_t    regValue;
     int     result = SPI_WR_ERR;
 
     bank = (reg & 0x60);                                // isolate bank number
@@ -260,8 +264,8 @@ static int writeControlRegister(ctrlReg_t reg, u8_t byte)
     spiWriteByte(ETHERNET_WR, byte);                    // and send the data byte
 
 ABORT_WCR:
-#ifdef DRV_DEBUG
-    printf("writeControlRegister(%d,0x%02x) %d\n", reg, byte, result);
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("writeControlRegister(0x%02x,0x%02x) %d\n", reg, byte, result);
 #endif
     return result;
 }
@@ -309,8 +313,8 @@ static int readPhyRegister(phyReg_t reg, u16_t* word)
     *word += ((u16_t) byte) << 8;
 
 ABORT_PHYRD:
-#ifdef DRV_DEBUG
-    printf("readPhyRegister(%d,0x%04x) %d\n", reg, *word, result);
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("readPhyRegister(0x%02x,0x%04x) %d\n", reg, *word, result);
 #endif
     return result;
 }
@@ -347,8 +351,8 @@ static int writePhyRegister(phyReg_t reg, u16_t word)
     while ( controlBit(MISTAT, MISTAT_BUSY) ) {};   // wait for write operation to complete @@ timeouts?
 
 ABORT_PHYWR:
-#ifdef DRV_DEBUG
-    printf("writePhyRegister(%d,0x%04x) %d\n", reg, word, result);
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("writePhyRegister(0x%02x,0x%04x) %d\n", reg, word, result);
 #endif
     return result;
 }
@@ -369,8 +373,8 @@ static int controlBit(ctrlReg_t reg, u8_t position)
     if ( readControlRegister(reg, &value) == SPI_OK)    // get register value
         result = ((value & position) ? 1 : 0);
 
-#ifdef DRV_DEBUG
-    printf("controlBit(%d,0x%02x) %d\n", reg, position, result);
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("controlBit(0x%02x,0x%02x) %d\n", reg, position, result);
 #endif
     return result;
 }
@@ -387,23 +391,29 @@ static int setControlBit(ctrlReg_t reg, u8_t position)
     u8_t    bank;
     u8_t    regId;
     u8_t    regValue;
-    int     result = -1;                                // which is also 'SPI_BUSY'...
+    int     result = -1;                                    // which is also 'SPI_BUSY'...
 
-    if ( reg & MACMII )                                 // is this a MAC or MII register?
-        goto ABORT_BFS;                                 // yes, can't use this feature on MAC or MII
+    if ( reg & MACMII )                                     // is this a MAC or MII register?
+    {                                                       // yes, can't use BFS command on MAC or MII, but...
+        result = readControlRegister(reg, &regValue);       // can read register,
+        regValue |= position;                               // modify
+        result = writeControlRegister(reg, regValue);       // and write back
+    }
+    else
+    {
+        bank = (reg & 0x60);                                // isolate bank number
+        regId = (reg & 0x1f);                               // isolate register number
 
-    bank = (reg & 0x60);                                // isolate bank number
-    regId = (reg & 0x1f);                               // isolate register number
+        if ( (result = setRegisterBank(bank)) != SPI_OK)    // select bank
+            goto ABORT_BFS;
 
-    if ( (result = setRegisterBank(bank)) != SPI_OK)    // select bank
-        goto ABORT_BFS;
-
-    spiWriteByteKeepCS(ETHERNET_WR, (OP_BFS | regId));  // issue a control register write command
-    spiWriteByte(ETHERNET_WR, position);                // and send the data byte
+        spiWriteByteKeepCS(ETHERNET_WR, (OP_BFS | regId));  // issue a control register write command
+        spiWriteByte(ETHERNET_WR, position);                // and send the data byte
+    }
 
 ABORT_BFS:
-#ifdef DRV_DEBUG
-    printf("setControlBit(%d,0x%02x) %d\n", reg, position, result);
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("setControlBit(0x%02x,0x%02x) %d\n", reg, position, result);
 #endif
     return result;
 }
@@ -420,23 +430,29 @@ static int clearControlBit(ctrlReg_t reg, u8_t position)
     u8_t    bank;
     u8_t    regId;
     u8_t    regValue;
-    int     result = -1;                                // which is also 'SPI_BUSY'...
+    int     result = -1;                                    // which is also 'SPI_BUSY'...
 
-    if ( reg & MACMII )                                 // is this a MAC or MII register?
-        goto ABORT_BFC;                                 // yes, can't use this feature on MAC or MII
+    if ( reg & MACMII )                                     // is this a MAC or MII register?
+    {                                                       // yes, can't use BFC command on MAC or MII, but...
+        result = readControlRegister(reg, &regValue);       // can read register,
+        regValue &= ~position;                              // modify
+        result = writeControlRegister(reg, regValue);       // and write back
+    }
+    else
+    {
+        bank = (reg & 0x60);                                // isolate bank number
+        regId = (reg & 0x1f);                               // isolate register number
 
-    bank = (reg & 0x60);                                // isolate bank number
-    regId = (reg & 0x1f);                               // isolate register number
+        if ( (result = setRegisterBank(bank)) != SPI_OK)    // select bank
+            goto ABORT_BFC;
 
-    if ( (result = setRegisterBank(bank)) != SPI_OK)    // select bank
-        goto ABORT_BFC;
-
-    spiWriteByteKeepCS(ETHERNET_WR, (OP_BFC | regId));  // issue a control register write command
-    spiWriteByte(ETHERNET_WR, position);                // and send the data byte
+        spiWriteByteKeepCS(ETHERNET_WR, (OP_BFC | regId));  // issue a control register write command
+        spiWriteByte(ETHERNET_WR, position);                // and send the data byte
+    }
 
 ABORT_BFC:
-#ifdef DRV_DEBUG
-    printf("clearControlBit(%d,0x%02x) %d\n", reg, position, result);
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("clearControlBit(0x%02x,0x%02x) %d\n", reg, position, result);
 #endif
     return result;
 }
@@ -450,7 +466,11 @@ ABORT_BFC:
 static void spiCallBack(void)
 {
     dmaComplete = 1;
-#ifdef DRV_DEBUG
+
+#ifdef DRV_DEBUG_FUNC_PARAM
+    printf("%s()\n dmaComplete=%d\n", __func__, dmaComplete);
+#endif
+#ifdef DRV_DEBUG_FUNC_EXIT
     printf("spiCallBack()\n");
 #endif
 }
@@ -462,30 +482,26 @@ static void spiCallBack(void)
  *  starting at 'address' into destination location 'dest'
  *  use DMA or single byte access.
  *  always assume internal read pointer ERDPT is auto increment
+ *  function does not range check 'address' parameter
  *  return 0 if no error, otherwise return SPI error level
  *
  * ----------------------------------------- */
 static int readMemBuffer(u8_t *dest, u16_t address, u16_t length)
 {
     int     result = SPI_RD_ERR;
-    u8_t    addHigh;
-    u8_t    addLow;
+    int     i;
+
+#ifdef DRV_DEBUG_FUNC_PARAM
+    printf("%s()\n len=%u address=0x%04x\n", __func__, length, address);
+#endif
 
     if ( length == 0 )
-        goto ABORT_RBM;
-
-    addHigh = (u8_t) (address >> 8);
-    addLow  = (u8_t) address;
+        return SPI_RD_ERR;
 
     if ( address != USE_CURR_ADD )                  // change address pointer or use default
     {
-        if ( addHigh <= INIT_ERXNDH )               // range check @@ assuming start of buffer is 0x0000
-        {
-            writeControlRegister(ERDPTL, addLow);
-            writeControlRegister(ERDPTH, addHigh);
-        }
-        else
-            goto ABORT_RBM;
+        writeControlRegister(ERDPTL, LOW_BYTE(address));
+        writeControlRegister(ERDPTH, HIGH_BYTE(address));
     }
 
     if ( length == 1 )
@@ -497,14 +513,18 @@ static int readMemBuffer(u8_t *dest, u16_t address, u16_t length)
     {                                               // use DMA to read multiple bytes
         dmaComplete = 0;
         spiWriteByteKeepCS(ETHERNET_WR, OP_RBM);    // issue read memory command
+/*
         result = spiReadBlock(ETHERNET_RD, dest, length, spiCallBack); // start DMA transfer
+        printf(" result = %d\n", result);
+        if ( result != SPI_OK )
+            goto ABORT_RBM;
         while ( !dmaComplete ) {};                  // wait for DMA transfer to complete
+*/
+        for ( i = 0; i < (length-1); i++)
+            spiReadByteKeepCS(ETHERNET_RD, (dest+i));
+        result = spiReadByte(ETHERNET_RD, (dest+i));
     }
 
-ABORT_RBM:
-#ifdef DRV_DEBUG
-    printf("readMemBuffer(dest, 0x%04x, %d) %d\n", address, length, result);
-#endif
     return result;
 }
 
@@ -514,48 +534,50 @@ ABORT_RBM:
  *  write 'length' bytes into ENC28J60 memory
  *  starting at 'address' from source location 'src'
  *  use DMA or single byte access.
+ *  always assume internal read pointer EWRPT is auto increment
+ *  function does not range check 'address' parameter
+ *  return 0 if no error, otherwise return SPI error level
  *
  * ----------------------------------------- */
 static int writeMemBuffer(u8_t *src, u16_t address, u16_t length)
 {
-    int     result = SPI_RD_ERR;
-    u8_t    addHigh;
-    u8_t    addLow;
+    int     result = SPI_WR_ERR;
+    int     i;
+
+#ifdef DRV_DEBUG_FUNC_PARAM
+    printf("%s()\n len=%u address=0x%04x\n", __func__, length, address);
+#endif
 
     if ( length == 0 )
-        goto ABORT_WBM;
-
-    addHigh = (u8_t) (address >> 8);
-    addLow  = (u8_t) address;
+        return SPI_WR_ERR;
 
     if ( address != USE_CURR_ADD )                  // change address pointer or use default
     {
-        if ( addHigh >= INIT_ETXSTH )               // range check @@ assuming start of buffer is 0x1500
-        {
-            writeControlRegister(EWRPTL, addLow);
-            writeControlRegister(EWRPTH, addHigh);
-        }
-        else
-            goto ABORT_WBM;
+        writeControlRegister(EWRPTL, LOW_BYTE(address));
+        writeControlRegister(EWRPTH, HIGH_BYTE(address));
     }
 
     if ( length == 1 )
-    {                                               // read a single byte
+    {                                               // write a single byte
         spiWriteByteKeepCS(ETHERNET_WR, OP_WBM);    // issue write memory command
         result = spiWriteByte(ETHERNET_WR, *src);   // write a byte and release CS
     }
     else
-    {                                               // use DMA to read multiple bytes
+    {                                               // use DMA to write multiple bytes
         dmaComplete = 0;
         spiWriteByteKeepCS(ETHERNET_WR, OP_WBM);    // issue write memory command
+/*
         result = spiWriteBlock(ETHERNET_WR, src, length, spiCallBack); // start DMA transfer
+        printf(" result = %d\n", result);
+        if ( result != SPI_OK )
+            goto ABORT_WBM;
         while ( !dmaComplete ) {};                  // wait for DMA transfer to complete
+*/
+        for ( i = 0; i < (length-1); i++)
+            spiWriteByteKeepCS(ETHERNET_WR, *(src+i));
+        result = spiWriteByte(ETHERNET_WR, *(src+i));
     }
 
-ABORT_WBM:
-#ifdef DRV_DEBUG
-    printf("writeMemBuffer(src, 0x%04x, %d) %d\n", address, length, result);
-#endif
     return result;
 
 }
@@ -571,20 +593,21 @@ ABORT_WBM:
 int ethLinkUp(void)
 {
     u16_t   phyStatus;
+    int     linkState;
+
+    readPhyRegister(PHSTAT2, &phyStatus);
+    linkState = ((phyStatus & PHSTAT2_LSTAT) ? 1 : 0);
 
 /*
-    readPhyRegister(PHSTAT2, &phyStatus);
-#ifdef DRV_DEBUG
-    printf("ethLinkUp(PHSTAT2_LSTAT) %d\n", (phyStatus & PHSTAT2_LSTAT));
-#endif
-    return ((phyStatus & PHSTAT2_LSTAT) ? 1 : 0);
+    readPhyRegister(PHSTAT1, &phyStatus);
+    linkState = ((phyStatus & PHSTAT1_LLSTAT) ? 1 : 0);
 */
 
-    readPhyRegister(PHSTAT1, &phyStatus);
-#ifdef DRV_DEBUG
-    printf("ethLinkUp(PHSTAT1_LLSTAT) %d\n", (phyStatus & PHSTAT1_LLSTAT));
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("ethLinkUp(%d)\n",linkState);
 #endif
-    return ((phyStatus & PHSTAT1_LLSTAT) ? 1 : 0);
+
+    return linkState;
 }
 
 /* -----------------------------------------
@@ -597,11 +620,14 @@ int ethLinkUp(void)
  * ----------------------------------------- */
 static void ethReset(void)
 {
-    spiWriteByte(ETHERNET_WR, OP_SC);                   // issue a reset command
-    while ( controlBit(ESTAT, ESTAT_CLKRDY) == 0 ) {};  // wait for system clock to be ready @@ timeouts?
-#ifdef DRV_DEBUG
-    printf("ethReset()\n");
+    int     i;
+
+#ifdef DRV_DEBUG_FUNC_NAME
+    printf("%s()\n",__func__);
 #endif
+
+    spiWriteByte(ETHERNET_WR, OP_SC);           // issue a reset command
+    for (i = 0; i < 550; i++);                  // wait ~2mSec because ESTAT.CLKRDY is not reliable (errata #2, DS80349C)
 }
 
 /* -----------------------------------------
@@ -615,7 +641,7 @@ static int packetWaiting(void)
 {
     u8_t    packetCount;
 
-    readControlRegister(EPKTCNT, &packetCount);         // check packet count waiting in input buffer
+    readControlRegister(EPKTCNT, &packetCount); // check packet count waiting in input buffer
     return ( packetCount > 0 ? 1 : 0);
 }
 
@@ -661,16 +687,28 @@ static void extractPacketInfo(struct enc28j60_t *ethif)
  * return: 0 initialization done and link up, non-0 initialization failed
  *
  * ----------------------------------------- */
-static int enc28j60Init(struct enc28j60_t *ethState)
+static err_t enc28j60Init(struct enc28j60_t *ethState)
 {
     u16_t   tmpPhyReg;
     u8_t    perPacketCtrl = PER_PACK_CTRL;
-    int     result = -1;
+    err_t   result = ERR_IF;                                // signal an interface error
 
-    while ( controlBit(ESTAT, ESTAT_CLKRDY) == 0 ) {};  // wait for system clock to be ready before starting initialization @@ timeouts?
+#ifdef DRV_DEBUG_FUNC_NAME
+    printf("%s()\n",__func__);
+#endif
 
-    clearControlBit(ECON1, ECON1_RXEN);                 // reception disabled
-    clearControlBit(ECON1, ECON1_TXRTS);                // transmit disabled
+    ethReset();                                             // issue a reset command
+
+    readPhyRegister(PHID1, &(ethState->phyID1));            // read and store PHY ID and device revision
+    readPhyRegister(PHID2, &(ethState->phyID2));
+    readControlRegister(EREVID, &(ethState->revID));
+
+#ifdef DRV_DEBUG_FUNC_PARAM
+    printf("enc28j60Init()\n PHID1=0x%04x PHID2=0x%04x Rev=0x%02x\n", ethState->phyID1, ethState->phyID2, ethState->revID);
+#endif
+
+    assert(ethState->phyID1 == PHY_ID1);                    // assert on ID values!
+    assert(ethState->phyID2 == PHY_ID2);
 
     /* initialize private device structure
      */
@@ -680,71 +718,88 @@ static int enc28j60Init(struct enc28j60_t *ethState)
     ethState->rxStatVector.rxStatus1 = 0;
     ethState->rxStatVector.rxStatus2 = 0;
 
-    ethState->ethaddr.addr[0] = MAC0;                   // MAC address
+    ethState->ethaddr.addr[0] = MAC0;                       // MAC address
     ethState->ethaddr.addr[1] = MAC1;
     ethState->ethaddr.addr[2] = MAC2;
     ethState->ethaddr.addr[3] = MAC3;
     ethState->ethaddr.addr[4] = MAC4;
     ethState->ethaddr.addr[5] = MAC5;
 
-    ethState->phyID1 = 0;
-    ethState->phyID2 = 0;
-
     /* initialize device buffer pointers and receiver filter
      */
-    writeControlRegister(ERXSTL, INIT_ERXSTL);          // initialize receive buffer start
-    writeControlRegister(ERXSTH, INIT_ERXSTH);
-    writeControlRegister(ERXNDL, INIT_ERXNDL);          // initialize receive buffer end
-    writeControlRegister(ERXNDH, INIT_ERXNDH);
-    writeControlRegister(ERDPTL, INIT_ERDPTL);          // initialize read pointer
-    writeControlRegister(ERDPTH, INIT_ERDPTH);
-    writeControlRegister(ERXWRPTL, INIT_ERXWRPTL);      // force write pointer to ERXST, Errata #5 workaround
-    writeControlRegister(ERXWRPTH, INIT_ERXWRPTH);
-    writeControlRegister(ERXRDPTL, INIT_ERXRDPTL);      // force read pointer to ERXST
-    writeControlRegister(ERXRDPTH, INIT_ERXRDPTH);
+    writeControlRegister(ERXSTL, LOW_BYTE(INIT_ERXST));     // initialize receive buffer start
+    writeControlRegister(ERXSTH, HIGH_BYTE(INIT_ERXST));
+    writeControlRegister(ERXNDL, LOW_BYTE(INIT_ERXND));     // initialize receive buffer end
+    writeControlRegister(ERXNDH, HIGH_BYTE(INIT_ERXND));
+    writeControlRegister(ERDPTL, LOW_BYTE(INIT_ERDPT));     // initialize read pointer
+    writeControlRegister(ERDPTH, HIGH_BYTE(INIT_ERDPT));
+    writeControlRegister(ERXWRPTL, LOW_BYTE(INIT_ERXWRPT)); // force write pointer to ERXST, Errata #5 workaround
+    writeControlRegister(ERXWRPTH, HIGH_BYTE(INIT_ERXWRPT));
+    writeControlRegister(ERXRDPTL, LOW_BYTE(INIT_ERXRDPT)); // force read pointer to ERXST
+    writeControlRegister(ERXRDPTH, HIGH_BYTE(INIT_ERXRDPT));
 
-    writeControlRegister(ERXFCON, INIT_ERXFCON);        // setup device packet filter
+    writeControlRegister(ERXFCON, INIT_ERXFCON);            // setup device packet filter
 
     /* MAC initialization settings
      */
-    clearControlBit(MACON2, MACON2_MARST);              // pull the MAC out of Reset
-    setControlBit(MACON1, MACON1_MARXEN);               // enable the MAC to receive frames
-    setControlBit(MACON1, (MACON1_TXPAUS | MACON1_RXPAUS)); // for full duplex, set TXPAUS and RXPAUS to allow flow control
-    setControlBit(MACON3, (MACON3_PADCFG | MACON3_TXCRCEN | MACON3_FULDPX | MACON3_FRMLEN)); // full frame padding + CRC
+    setControlBit(MACON1, MACON1_MARXEN);                                       // enable the MAC to receive frames
+#if FULL_DUPLEX
+    setControlBit(MACON1, (MACON1_TXPAUS | MACON1_RXPAUS));                     // for full duplex, set TXPAUS and RXPAUS to allow flow control
+    setControlBit(MACON3, MACON3_FULDPX);                                       // set for full duplex
+#else
+    clearControlBit(MACON1, (MACON1_TXPAUS | MACON1_RXPAUS));                   // for half duplex, clear TXPAUS and RXPAUS
+    clearControlBit(MACON3, MACON3_FULDPX);                                     // set for half duplex
+#endif
+    setControlBit(MACON3, (MACON3_PADCFG | MACON3_TXCRCEN | MACON3_FRMLEN));    // full frame padding + CRC
 
-    writeControlRegister(MAMXFLL, INIT_MAMXFLL);        // max frame size
-    writeControlRegister(MAMXFLH, INIT_MAMXFLH);
+    writeControlRegister(MAMXFLL, LOW_BYTE(INIT_MAMXFL));   // max frame size
+    writeControlRegister(MAMXFLH, HIGH_BYTE(INIT_MAMXFL));
 
-    writeControlRegister(MABBIPG, INIT_MABBIPG);        // no detail why, just how to program them
+    writeControlRegister(MABBIPG, INIT_MABBIPG);            // no detail why, just how to program them
 	writeControlRegister(MAIPGL, INIT_MAIPGL);
 	writeControlRegister(MAIPGH, INIT_MAIPGH);
 
-    writeControlRegister(MAADR1, MAC0);                 // MAC address
+    writeControlRegister(MAADR1, MAC0);                     // MAC address
     writeControlRegister(MAADR2, MAC1);
     writeControlRegister(MAADR3, MAC2);
     writeControlRegister(MAADR4, MAC3);
     writeControlRegister(MAADR5, MAC4);
     writeControlRegister(MAADR6, MAC5);
 
-    readPhyRegister(PHCON1, &tmpPhyReg);                // set PHY to match full duplex setup MACON3_FULDPX
+#if FULL_DUPLEX
+    readPhyRegister(PHCON1, &tmpPhyReg);                    // set PHY to match half duplex setup MACON3_FULDPX
     tmpPhyReg |= PHCON1_PDPXMD;
+    tmpPhyReg &= ~PHCON1_PLOOPBK;                           // make sure loop-back is off
+    writePhyRegister(PHCON1, tmpPhyReg);
+#else
+    readPhyRegister(PHCON1, &tmpPhyReg);                    // set PHY to match half duplex setup MACON3_FULDPX
+    tmpPhyReg &= ~PHCON1_PDPXMD;
+    tmpPhyReg &= ~PHCON1_PLOOPBK;                           // make sure loop-back is off
     writePhyRegister(PHCON1, tmpPhyReg);
 
-    readPhyRegister(PHCON1, &(ethState->phyID1));       // read and store PHY ID
-    readPhyRegister(PHCON1, &(ethState->phyID2));
+    readPhyRegister(PHCON2, &tmpPhyReg);                    // disable half duplex loopback
+    tmpPhyReg |= PHCON2_HDLDIS;
+    writePhyRegister(PHCON2, tmpPhyReg);
+#endif  /* FULL_DUPLEX */
 
-    writeMemBuffer(&perPacketCtrl, (u16_t) ((INIT_ETXSTH << 8) + INIT_ETXSTL), 1);  // prep Tx buffer with per-packet control byte
+    writeMemBuffer(&perPacketCtrl, (u16_t) INIT_ETXST, 1);  // prep Tx buffer with per-packet control byte
 
-    setControlBit(ECON2, ECON2_AUTOINC);                // set auto increment memory pointer operation
+    setControlBit(ECON2, ECON2_AUTOINC);                    // set auto increment memory pointer operation
+
+    tmpPhyReg = 30000;
+    while ( tmpPhyReg && ethLinkUp() == 0 )                 // wait for link up
+    {
+        tmpPhyReg--;
+    }
 
     if ( ethLinkUp() == 1 )
     {
-        setControlBit(ECON1, ECON1_RXEN);               // enable frame reception @@ do I do these here?
-        result = 0;
+        setControlBit(ECON1, ECON1_RXEN);                   // enable frame reception @@ do I do these here?
+        result = ERR_OK;
     }
 
-#ifdef DRV_DEBUG
-    printf("PHY ID 0x%04x:0x%04x\n", ehtState->phyID1, ehtState->phyID2);
+#ifdef DRV_DEBUG_FUNC_EXIT
+    printf("PHY ID 0x%04x:0x%04x\n", ethState->phyID1, ethState->phyID2);
     printf("enc28j60Init() %d\n", result);
 #endif
 
@@ -760,8 +815,14 @@ static int enc28j60Init(struct enc28j60_t *ethState)
  * param: netif the already initialized lwip network interface structure
  *        for this ethernet interface
  * ----------------------------------------- */
-static void low_level_init(struct netif *netif)
+static err_t low_level_init(struct netif *netif)
 {
+  err_t   result = ERR_IF;                      // signal an interface error
+
+#ifdef DRV_DEBUG_FUNC_NAME
+  printf("%s()\n",__func__);
+#endif
+
   /* set MAC hardware address length */
   netif->hwaddr_len = ETHARP_HWADDR_LEN;
 
@@ -784,12 +845,14 @@ static void low_level_init(struct netif *netif)
   /* chip initialization
    *
    */
-  if ( enc28j60Init(netif->state) == 0 )
-    netif->flags |= NETIF_FLAG_LINK_UP;         // if ENC28J60 initializes properly then set state to link up
+  if ( (result = enc28j60Init(netif->state)) == ERR_OK )
+    netif->flags |= (NETIF_FLAG_LINK_UP | NETIF_FLAG_UP);   // if ENC28J60 initializes properly then set state to link up
 
-#ifdef DRV_DEBUG
-    printf("low_level_init() done\n");
+#ifdef DRV_DEBUG_FUNC_EXIT
+  printf("low_level_init() done\n");
 #endif
+
+  return result;
 }
 
 /* -----------------------------------------
@@ -811,31 +874,39 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
 {
   struct enc28j60_t *ethif = netif->state;
   struct pbuf       *q;
-  u8_t               temp;
-  u16_t              txBufferEnd;
+  u8_t               tempU8;
+  u16_t              tempU16;
 
-  writeControlRegister(ETXSTL, INIT_ETXSTL);                // explicitly set the transmit buffer start
-  writeControlRegister(ETXSTH, INIT_ETXSTH);
+#ifdef DRV_DEBUG_FUNC_NAME
+  printf("%s()\n",__func__);
+#endif
 
-  writeControlRegister(EWRPTL, INIT_EWRPTL);                // setup buffer write pointer
-  writeControlRegister(EWRPTH, INIT_EWRPTH);
+  writeControlRegister(ETXSTL, LOW_BYTE(INIT_ETXST));       // explicitly set the transmit buffer start
+  writeControlRegister(ETXSTH, HIGH_BYTE(INIT_ETXST));
+
+  writeControlRegister(EWRPTL, LOW_BYTE(INIT_EWRPT));       // setup buffer write pointer
+  writeControlRegister(EWRPTH, HIGH_BYTE(INIT_EWRPT));
 
   // transfer packet data into ENC28J60 output buffer
   for (q = p; q != NULL; q = q->next)
   {
     // send the data from the pbuf to the interface, one pbuf at a time.
     // the size of the data in each pbuf is kept in the ->len variable.
-    writeMemBuffer((u8_t*) q->payload, USE_CURR_ADD, q->len);
+    assert(writeMemBuffer((u8_t*) q->payload, USE_CURR_ADD, q->len) == SPI_OK); // @@ convert to proper error handling
   }
 
-  readControlRegister(EWRPTH, &temp);                       // get value of write pointer
-  txBufferEnd = (u16_t) temp << 8;
-  readControlRegister(EWRPTL, &temp);
-  txBufferEnd += temp;
-  txBufferEnd--;
+  readControlRegister(EWRPTH, &tempU8);                     // get value of write pointer
+  tempU16 = (u16_t) tempU8 << 8;
+  readControlRegister(EWRPTL, &tempU8);
+  tempU16 += tempU8;
+  tempU16--;
 
-  writeControlRegister(ETXNDL, (u8_t) txBufferEnd);         // set buffer end address
-  writeControlRegister(ETXNDH, (u8_t) (txBufferEnd >> 8));
+  writeControlRegister(ETXNDL, LOW_BYTE(tempU16));          // set buffer end address
+  writeControlRegister(ETXNDH, HIGH_BYTE(tempU16));
+
+#ifdef DRV_DEBUG_FUNC_PARAM
+    printf("low_level_output()\n tot_len=%u txBufferEnd=0x%04x\n", p->tot_len, tempU16);
+#endif
 
   setControlBit(ECON1, ECON1_TXRTS);                        // enable/start frame transmission
 
@@ -853,8 +924,17 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
 
   if ( controlBit(ECON1, ECON1_TXRTS) ) {}                  // wait for transmission to complete
 
-  txBufferEnd++;                                            // read the packet transmit status vector
-  readMemBuffer(ethif->txStatusVector, txBufferEnd, sizeof(struct txStat_t));
+  tempU16++;                                                // read the packet transmit status vector
+  readMemBuffer(ethif->txStatusVector, tempU16, sizeof(struct txStat_t));
+
+#ifdef DRV_DEBUG_FUNC_PARAM
+    printf(" bytes Tx %u\n Stat1    0x%02x\n Stat2    0x%02x\n Stat3    0x%02x\n total Tx %u\n",
+            ethif->txStatVector.txByteCount,
+            ethif->txStatVector.txStatus1,
+            ethif->txStatVector.txStatus2,
+            ethif->txStatVector.txStatus3,
+            ethif->txStatVector.txTotalXmtCount);
+#endif
 
   if ( controlBit(ESTAT, ESTAT_TXABRT) == 1 )               // check for errors
   {
@@ -862,8 +942,8 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
       //LINK_STATS_INC(link.drop);
       MIB2_STATS_NETIF_INC(netif, ifoutdiscards);           // handle error counters @@ handle error recovery?
       MIB2_STATS_NETIF_INC(netif, ifouterrors);
-#ifdef DRV_DEBUG
-    printf("low_level_output() *** packet transmission failure ***\n");
+#ifdef DRV_DEBUG_FUNC_PARAM
+      printf(" *** packet transmission failure ***\n");
 #endif
   }
   else
@@ -886,7 +966,11 @@ static struct pbuf* low_level_input(struct netif *netif)
 {
     struct enc28j60_t   *ethif = netif->state;
     struct pbuf         *p, *q;
-    u16_t                len, xferCount, offset = 0;
+    u16_t                len, xferCount, offset;
+
+#ifdef DRV_DEBUG_FUNC_NAME
+    printf("%s()\n",__func__);
+#endif
 
     if ( !packetWaiting() )
         return NULL;
@@ -900,6 +984,15 @@ static struct pbuf* low_level_input(struct netif *netif)
     // into 'ethif'
     extractPacketInfo(ethif);
 
+#ifdef DRV_DEBUG_FUNC_PARAM
+    printf("low_level_input()\n len   %u\n next  0x%02x%02x\n stat1 0x%02x\n stat2 0x%02x\n",
+               ethif->rxStatVector.rxByteCount,
+               ethif->rxStatVector.nextPacketH,
+               ethif->rxStatVector.nextPacketL,
+               ethif->rxStatVector.rxStatus1,
+               ethif->rxStatVector.rxStatus2);
+#endif
+
     // Obtain the size of the packet and put it into the "len" variable.
     len = ethif->rxStatVector.rxByteCount;
 
@@ -912,12 +1005,33 @@ static struct pbuf* low_level_input(struct netif *netif)
       assert(len <= PACKET_BUFFER);
       readMemBuffer(tempPacketBuffer, USE_CURR_ADD, len);
 
+#ifdef DRV_DEBUG_FUNC_PARAM
+      {
+        int i;
+        printf(" dst: ");
+        for (i = 0; i < 6; i++)
+            printf("%02x ", tempPacketBuffer[i]);
+        printf("\n src: ");
+        for (i = 6; i < 12; i++)
+            printf("%02x ", tempPacketBuffer[i]);
+        printf("\n typ: ");
+        for (i = 12; i < 14; i++)
+            printf("%02x ", tempPacketBuffer[i]);
+        printf("\n");
+      }
+#endif
+
       // iterate over the pbuf chain until we have read the entire packet into the pbuf
+      offset = 0;
       for (q = p; q != NULL; q = q->next)
+      //for (q = p; q->tot_len == p->len; q = q->next) // see here: http://www.nongnu.org/lwip/2_0_x/group__pbuf.html
       {
           xferCount = ((len - offset) > q->len) ? q->len : (len - offset);
           memcpy(q->payload, (tempPacketBuffer + offset), xferCount);
           offset += xferCount;
+#ifdef DRV_DEBUG_FUNC_PARAM
+          printf(" xferd %d bytes to pbuf\n", offset);
+#endif
       }
 
       MIB2_STATS_NETIF_ADD(netif, ifinoctets, p->tot_len);
@@ -938,8 +1052,9 @@ static struct pbuf* low_level_input(struct netif *netif)
     LINK_STATS_INC(link.memerr);
     LINK_STATS_INC(link.drop);
     MIB2_STATS_NETIF_INC(netif, ifindiscards);
-#ifdef DRV_DEBUG
-    printf("low_level_input() *** 'pbuf' alloc err, packet dropped ***\n");
+
+#ifdef DRV_DEBUG_FUNC_PARAM
+    printf(" *** 'pbuf' alloc err, packet dropped ***\n");
 #endif
   }
 
@@ -964,6 +1079,10 @@ void enc28j60_input(struct netif *netif)
 {
   struct eth_hdr *ethhdr;
   struct pbuf *p;
+
+#ifdef DRV_DEBUG_FUNC_NAME
+  printf("%s()\n",__func__);
+#endif
 
   // move received packet into a new pbuf
   p = low_level_input(netif);
@@ -996,6 +1115,11 @@ void enc28j60_input(struct netif *netif)
 err_t enc28j60_init(struct netif *netif)
 {
   struct enc28j60_t *ethif;
+  err_t              result = ERR_IF;           // signal an interface error
+
+#ifdef DRV_DEBUG_FUNC_NAME
+  printf("%s()\n",__func__);
+#endif
 
   LWIP_ASSERT("netif != NULL", (netif != NULL));
 
@@ -1029,7 +1153,11 @@ err_t enc28j60_init(struct netif *netif)
   netif->linkoutput = low_level_output;
 
   // initialize the hardware
-  low_level_init(netif);
+  result = low_level_init(netif);
 
-  return ERR_OK;
+#if defined DRV_DEBUG_FUNC_PARAM && defined DRV_DEBUG_FUNC_NAME
+  printf(" [exit] %s() exit %d\n", __func__, result);
+#endif
+
+  return result;
 }

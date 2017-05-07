@@ -47,9 +47,23 @@
 #define __LWIPOPTS_H__
 
 /*
-   -----------------------------------------------
-   ---------- Platform specific locking ----------
-   -----------------------------------------------
+   ------------------------------------
+   -------- Build environement --------
+   ------------------------------------
+*/
+
+/**
+ * skip testing C++ const_cast<target_type>(val) equivalent to remove constness
+ * from a value (GCC -Wcast-qual).
+ * Warn whenever a pointer is cast so as to remove a type qualifier from the target type.
+ * For example, warn if a const char * is cast to an ordinary char *
+ */
+#define LWIP_SKIP_CONST_CHECK           1
+
+/*
+   ------------------------------------
+   ---------- Platform specific -------
+   ------------------------------------
 */
 
 /**
@@ -88,7 +102,7 @@
  * MEM_SIZE: the size of the heap memory. If the application will send
  * a lot of data that needs to be copied, this should be set high.
  */
-#define MEM_SIZE                        16000
+#define MEM_SIZE                        2048
 
 
 /*
@@ -101,13 +115,13 @@
  * If the application sends a lot of data out of ROM (or other static memory),
  * this should be set high.
  */
-#define MEMP_NUM_PBUF                   30
+#define MEMP_NUM_PBUF                   16
 
 /**
  * MEMP_NUM_RAW_PCB: Number of raw connection PCBs
  * (requires the LWIP_RAW option)
  */
-#define MEMP_NUM_RAW_PCB                4
+#define MEMP_NUM_RAW_PCB                0
 
 /**
  * MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
@@ -126,13 +140,13 @@
  * MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB_LISTEN         8
+#define MEMP_NUM_TCP_PCB_LISTEN         2
 
 /**
  * MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_SEG                16
+#define MEMP_NUM_TCP_SEG                8
 
 /**
  * MEMP_NUM_ARP_QUEUE: the number of simulateously queued outgoing
@@ -268,6 +282,14 @@
  * LWIP_RAW==1: Enable application layer to hook into the IP layer itself.
  */
 #define LWIP_RAW                        0
+
+/*
+   ------------------------------------------------
+   ---------- Network Interfaces options ----------
+   ------------------------------------------------
+*/
+
+#define LWIP_NETIF_HOSTNAME             1
 
 /*
    ----------------------------------

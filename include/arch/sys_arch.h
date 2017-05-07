@@ -17,6 +17,11 @@
 ----------------------------------------- */
 typedef int     sys_prot_t;
 
+/* -----------------------------------------
+   system type definition
+----------------------------------------- */
+#define         SYSTEM_DOS
+//#define         SYSTEM_LMTE
 
 /*
  * references from here: http://lwip.wikia.com/wiki/Porting_for_an_OS
