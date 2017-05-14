@@ -1,0 +1,164 @@
+
+I wrote this IP stack after trying out the LwIP stack for my project.
+LwIP was not light weight enough for my needs, and the documentation, IMHO,
+was less than adequate for debugging issues. While functions and data structures
+were nicely documented, the examples and wiki were often out dated.
+LwIP 2.0.2 was too convoluted for my needs to support a simple ethernet interface
+in a DOS environment, and within my specialized multi-tasking executive.
+This stack borrows several implementation ideas from LwIP.
+
+This README file will document the stack as I build it from the 'ground up',
+with a file list at the end.
+
+The structure of the code modules follows the OSI model, with as much flexibility as I thought
+would be useful for extending the framework for things such as more that one ethernet interface
+and varying amounts of resources dedicated to TCP connections ARP table size etc.
+
+Each module matches a layer in the OSI model, and 'plugs into' a common 'ip4stack' module.
+The 'ip4stack' module implements only IPv4 and supplies all the data structures, utilities etc
+that are used to run the stack: timers, setup/init code and so on.
+The stack module follows the LwIP model of call-backs. This model fit my needs for running the stack
+in a single thread environment, with no OS. So this will be either in my FlashLite NEC v25 8bit SBC DOS or
+my home-brew multi-task executive (when running the stack isolated in a single task).
+Since this stack is intended to run in an embedded environment, I avoided dynamic allocations as much
+as possible and stuck to compile time static allocation based on the 'options.h' header.
+
+A rough ASCII sketch of the architecture and associated files:
+
+ +--------------------------+
+ | Stack common components  |
+ | ~~~~~~~~~~~~~~~~~~~~~~~~ |
+ | stack.c                  |
+ | stack.h                  |
+ | options.h                |
+ |                          |
+ |                          |
+ |                          |
+ |                          |
+ |                          |
+ |                          |
+ |                          +-------------------------------+
+ |                          |                               |
+ |                          |                               |
+ |                          |                               |        arp_output()
+ |                          +-----------/\----------+---\/--+-+ <--- ip4_input()
+ |                          |                       |         |
+ |                          | Physical & Data Link  | ARP     |
+ |                          | ~~~~~~~~~~~~~~~~~~~~~ | ~~~~~~~ |
+ |                          | netif.c               | arp.c   |
+ |                          | netif.h               | arp.c   |
+ |                          |                       |         |
+ |                          | enc28j60.c            +-------+-+ <--- link_packet_handler()
+ |                          | enc28j60.h                    |
+ |                          | enc28j60-hw.h                 |
+ |                          |                               |        link_output()
+ |                          +-----------/\--------------\/--+ <----- interface_input()
+ |                          |                               |
+ |                          | Link HW driver                |
+ +--------------------------+-------------------------------+ <----- link_input()
+
+ Sections
+-----------------------------------------
+ 1. ENC28J60 driver
+ 2. Network interface (netif)
+ 3. ARP
+ 
+@@. IPv4 stack common components
+    File list
+
+
+ 1. ENC28J60 driver
+-----------------------------------------
+The driver structure borrows a lot from the LwIP driver skeleton provided with the LwIP source code.
+This is simply because I had the driver written, and chose to reuse the code more or less as is.
+The driver module contains two stack interface functions: low_level_output() and low_level_input().
+low_level_input() is called periodically by the network interface function interface_input(). The function checks
+the network device for the waiting packets and reads them into a buffer.
+low_level_output() is a function that will be called by the stack when data packets need to be transmitted.
+low_level_output() is linked to the stack through the net_interface_t 'linkoutput' member,
+and is intended to send data as-is. When data packets need to be sent and require address resolution (adding
+source and destination MAC addresses) the function linked to the 'output' member should be used; this function
+runs through address resolution first and then calls low_level_output() through 'linkoutput' member.
+The ethLinkUp() will test the link condition and return 'up' (1) or 'down' (0) condition. This function should
+also be called repeatedly from within the same loop as interface_input(), and the code should take action if link
+state has changed from the last poll.
+
+ 2. Network interface (netif)
+-----------------------------------------
+The network interface module is a common code module for any driver.
+There is a one-to-one relationship between driver and network interface because the driver
+functions for input and output will be accessed through a common net_interface_t structure.
+The network interface module (netif.c) exposes two functions: interface_init() and interface_input().
+The interface_init() function is used to initialize the interface. It calls the driver enc28j60Init() for the
+chip initialization.
+The interface_input()function will be used to poll for input packets. It will either return directly if no
+packets are waiting to be read from the interface HW, or read a waiting packet and forward it up the stack.
+This function should be called repeatedly in the main program inside an infinite loop so that it can periodically
+poll the interface. There is no support for an interrupt driven setup.
+
+@@. IPv4 stack common components
+-----------------------------------------
+The IPv4 stack functions are typically separated according to the layer they act in. The ASCII diagram has the
+module names listed in the appropriate stack locations.
+The stack has several utility functions that are common to all or most layers such as timers, buffer allocation, etc.,
+which are all located in the ip4stack.c module.
+
+Buffer allocation
+    I chose to use a very simple, probably also wasteful, buffer allocation schema.
+    The allocation is done from statically allocated (optionally a dynamic allocation) set of
+    buffers of a know size. I chose 1536 bytes per buffer because it aligns with the CPU addressing
+    and is large enough for a single size IO packet. This way there is no chaining of smaller buffers and processing is simpler.
+    There are two sets of buffers: transmit and receive, and the count can be set in options.h header file.
+    Allocation is done from the pool of buffers with calls to allocatePbuf() and freePbuf() ;-)
+    The options set the receive buffer count to 1 because the ENC28J60 I use has up to 8K byte of possible memory
+    buffering, out of which I provisioned 5K byte for receive frames and 3K byte (2 x frame sizes) for transmit buffer.
+
+Stub input and output functions
+    @@
+
+ File list
+-----------------------------------------
+
+README
+
+    This file
+
+arp.c
+arp.h
+
+    Ethetnet ARP protocol module.
+       
+enc28j60.c
+enc28j60.h
+enc28j60-hw.h
+
+    Microchip ENC28J60 device driver and driver functions for read/write of data packets.
+
+error.h
+
+    defined stack wide error code enumeration type
+
+ipStackFiles.mk
+
+    Make helper file with file lists for build/compile
+    
+netif.c
+netif.h
+
+    Data link and interface module. call HE initialization, link bring up and
+    link level input/output
+
+options.h
+
+    IP stack options borrowing from LwIP options files
+    The options header should be included with every IP stack code module and is
+    required for building IP stack modules.
+
+stack.c
+stack.h
+
+    IPv4 stack code module and header file.
+
+types.h
+
+    defines stack wide data types and data structures

@@ -203,7 +203,7 @@ static void delay(unsigned int miliSec)
  *  return SPI error codes defined in 'spi.h'
  *
  */
-static int lcdWriteCommand(unsigned char byte)
+static spiDevErr_t lcdWriteCommand(unsigned char byte)
 {
     return spiWriteByte(LCD_CMD, byte);
 }
@@ -215,7 +215,7 @@ static int lcdWriteCommand(unsigned char byte)
  *  return SPI error codes defined in 'spi.h'
  *
  */
-static int lcdWriteData(unsigned char byte)
+static spiDevErr_t lcdWriteData(unsigned char byte)
 {
     return spiWriteByte(LCD_DATA, byte);
 }
