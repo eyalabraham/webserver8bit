@@ -33,7 +33,8 @@ VPATH = $(INCDIR)
 include $(IPDIR)/ipStackFiles.mk
 
 COREOBJ=$(STACKCORE:.c=.o)
-NETIFOBJ=$(DRIVER:.c=.o)
+NETIFOBJ=$(INTERFACE:.c=.o)
+NETWORKOBJ=$(NETWORK:.c=.o)
 
 #------------------------------------------------------------------------------------
 # build utilities
@@ -125,6 +126,7 @@ ip: ipnetif ipcore
 
 ipcore: $(COREOBJ)
 ipnetif: $(NETIFOBJ)
+ipnetwork: $(NETWORKOBJ)
 
 #------------------------------------------------------------------------------------
 # build spitest.exe test program
@@ -143,7 +145,7 @@ ethtest: ethtest.exe
 
 ethtest.o: ethtest.c
 
-ethtest.exe: ethtest.o ppispi.o $(NETIFOBJ) $(COREOBJ)
+ethtest.exe: ethtest.o ppispi.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ)
 	$(LINK) $(ETHTESTLINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
 
 #------------------------------------------------------------------------------------

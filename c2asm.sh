@@ -13,13 +13,13 @@
 #
 # setup some directories and file names
 #
-WCCOPT="-0 -ml -d1 -s -zu -i=/home/eyal/bin/watcom/h -i=./include"
+WCCOPT="-0 -ml -d1 -s -zu -zp1 -i=/home/eyal/bin/watcom/h -i=./include -i=./include/ip"
 WDISOPT="-l -e -p -s"
 
 FULLFILENAME=$1
-FILENAME=${FULLFILENAME##*/}		# extract file name by removing directory and extension
-FNAME=${FILENAME%.*}				# extract file name only
-TEMPOBJ=$FNAME".o"					# setup temporary object file
+FILENAME=${FULLFILENAME##*/}        # extract file name by removing directory and extension
+FNAME=${FILENAME%.*}                # extract file name only
+TEMPOBJ=$FNAME".o"                  # setup temporary object file
 
 #
 # do the conversion

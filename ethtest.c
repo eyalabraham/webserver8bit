@@ -48,19 +48,19 @@ void main(int argc, char* argv[])
 
     printf("Build: ethtest.exe %s %s\n", __DATE__, __TIME__);
 
-    spiIoInit();                                    // initialize SPI interface
-    stack_init();                                   // initialize IP stack
-    netif = stack_get_ethif(0);                     // get pointer to interface 0
+    spiIoInit();                                        // initialize SPI interface
+    stack_init();                                       // initialize IP stack
+    netif = stack_get_ethif(0);                         // get pointer to interface 0
     assert(netif);
-    assert(interface_init(netif) == ERR_OK);        // initialize link HW
 
-    netif->ip4addr = IP4_ADDR(192,168,1,19);        // temporary way to setup a static assignment
-    netif->subnet = IP4_ADDR(255,255,255,0);
-    netif->gateway = IP4_ADDR(192,168,1,1);
+    assert(interface_init(netif) == ERR_OK);            // initialize link HW
+    interface_set_addr(netif, IP4_ADDR(192,168,1,19),   // setup static IP addressing
+                              IP4_ADDR(255,255,255,0),
+                              IP4_ADDR(192,168,1,1));
 
     printf("---- entering main loop ----\n");
 
-    linkState = link_state();
+    linkState = interface_link_state(netif);
     printf("link state = '%s'\n", linkState ? "up" : "down");
 
     while ( 1 )
@@ -70,9 +70,9 @@ void main(int argc, char* argv[])
        * test propagate the notification
        *
        */
-      if ( link_state() != linkState )
+      if ( interface_link_state(netif) != linkState )
       {
-          linkState = link_state();
+          linkState = interface_link_state(netif);
           printf("link state change = '%s'\n", linkState ? "up" : "down");
           switch ( linkState )
           {

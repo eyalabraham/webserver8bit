@@ -673,7 +673,8 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
         // read the waiting ethernet packet into the temporary buffer
         assert(len <= PACKET_BUF_SIZE);
         readMemBuffer(p->pbuf, USE_CURR_ADD, len);
-        p->len = len;
+        // set buffer length and adjust to ignore CRC bytes
+        p->len = len - 4;
 
 #ifdef DRV_DEBUG_FUNC_PARAM
         {

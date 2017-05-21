@@ -15,7 +15,9 @@
 
 #include    "ip/netif.h"
 #include    "ip/stack.h"
+#include    "ip/ipv4.h"
 #include    "ip/arp.h"
+#include    "ip/enc28j60.h"
 
 /* -----------------------------------------
  * interface_init()
@@ -33,7 +35,7 @@
  *    of function pointers should be passed as variables. this will make the
  *    function general for use with any link interface driver!
  *
- * ----------------------------------------- */
+ */
 ip4_err_t interface_init(struct net_interface_t* const netif)
 {
     ip4_err_t     result = ERR_NETIF;                   // signal an interface error
@@ -54,13 +56,11 @@ ip4_err_t interface_init(struct net_interface_t* const netif)
     netif->broadcast[4] = 0xff;
     netif->broadcast[5] = 0xff;
 
-    netif->mtu = MTU;                                   // maximum transfer unit
-
     netif->flags = IF_FLAG_INIT;                        // device capabilities and identification
     strncpy(netif->name, ETHIF_NAME, ETHIF_NAME_LENGTH);
 
     netif->arpTable[0].flags = ARP_FLAG_SHOW;           // tag one record as starting point for arp_show()
-    arp_add_entry(netif,                                // add loop-back IP address
+    arp_tbl_entry(netif,                                // add loop-back IP address
                   IP4_ADDR(127,0,0,1),
                   netif->hwaddr,
                   ARP_FLAG_STATIC);
@@ -68,11 +68,13 @@ ip4_err_t interface_init(struct net_interface_t* const netif)
     /* initialize interface function calls
      *
      */
-    netif->driver_init = enc28j60Init;                  // driver initialization function
-    netif->forward_input = arp_packet_handler;          // forward packet through ARP module for processing or forwarding to network layer
-    netif->output = arp_output;                         // @@ to be called when address resolution is required
+    netif->output = arp_output;                         // to be called when address resolution is required
+    netif->forward_input = arp_input;                   // forward packet through ARP module for processing or forwarding to network layer
+
     netif->linkinput = link_input;                      // to be called to get waiting packet from the link interface
     netif->linkoutput = link_output;                    // to be called when as-is data needs to be sent, without address resolution
+    netif->driver_init = enc28j60Init;                  // driver initialization function
+    netif->linkstate = link_state;                      // link state from driver
 
     /* initialize the HW interface
      *
@@ -96,13 +98,15 @@ ip4_err_t interface_init(struct net_interface_t* const netif)
  *
  * param:  netif the network interface structure for this ethernet interface
  * return: none
- * ----------------------------------------- */
+ *
+ */
 void interface_input(struct net_interface_t* const netif)
 {
     struct pbuf_t*  p;
 
     // move received packet into a new pbuf
-    p = netif->linkinput(netif->state);
+    if ( netif->linkinput )
+        p = netif->linkinput(netif->state);             // this function does a pbuf_allocate()
 
     // if no packet could be read, silently ignore this
     if (p != NULL)
@@ -112,4 +116,40 @@ void interface_input(struct net_interface_t* const netif)
             netif->forward_input(p, netif);             // forward the IP packet up the stack if a handler exists
         pbuf_free(p);                                   // free the pbuf after packet processing is complete
     }
+}
+
+/* -----------------------------------------
+ * interface_set_addr()
+ *
+ * This function setups up an interface's IP, Gateway and Subnet Mask.
+ *
+ * param:  netif the network interface and three IP addresses
+ * return: none
+ *
+ */
+void interface_set_addr(struct net_interface_t* const netif,
+                               ip4_addr_t ip, ip4_addr_t netmask, ip4_addr_t gw)
+{
+    netif->ip4addr = ip;
+    netif->subnet = netmask;
+    netif->gateway = gw;
+}
+
+/* -----------------------------------------
+ * interface_link_state()
+ *
+ * This function This function returns the link status
+ *
+ * param:  netif the network interface to be polled
+ * return: '1' or '0' for link 'up' or 'down'
+ *
+ */
+int interface_link_state(struct net_interface_t* const netif)
+{
+    int     state = 0;
+
+    if ( netif->linkstate )
+        state = netif->linkstate();
+
+    return state;
 }

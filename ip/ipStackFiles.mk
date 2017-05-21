@@ -6,13 +6,12 @@
 STACKCORE=$(IPDIR)/stack.c
 
 # Microchip ENC28J60 driver and data link layer
-DRIVER=$(IPDIR)/enc28j60.c \
+INTERFACE=$(IPDIR)/enc28j60.c \
 	$(IPDIR)/arp.c \
 	$(IPDIR)/netif.c
 
 # Network layer
-NETWORK=$(IPDIR)/ipv4.c \
-	$(IPDIR)/icmp.c
+NETWORK=$(IPDIR)/ipv4.c
 
 # transport layer
 TRANSPORT=$(IPDIR)/tcp.c \

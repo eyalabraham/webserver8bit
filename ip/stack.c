@@ -30,10 +30,6 @@ static struct ip4stack_t   stack;                                  // IP stack d
 static struct pbuf_t       txPbuf[TX_PACKET_BUFS];                 // transmit and
 static struct pbuf_t       rxPbuf[RX_PACKET_BUFS];                 // receive buffer pointers
 
-/* -----------------------------------------
-   static function prototype
------------------------------------------ */
-
 
 /*------------------------------------------------
  * stack_init()
@@ -186,15 +182,15 @@ void pbuf_free(struct pbuf_t* const p)
 }
 
 /*------------------------------------------------
- * BEtoLE()
+ * stack_byteswap()
  *
- *  big-endian to little-endian.
+ *  big-endian to/from little-endian, 16bit bytes swap
  *
  *  param:  uint16 in big-endian
  *  return: uint16 in little-endian
  *
  */
-uint16_t BEtoLE(uint16_t w)
+uint16_t stack_byteswap(uint16_t w)
 {
     uint16_t    temp;
 
@@ -202,6 +198,60 @@ uint16_t BEtoLE(uint16_t w)
     temp |= (uint16_t)(w << 8) & 0xff00;
 
     return temp;
+}
+
+/*------------------------------------------------
+ * stack_checksum()
+ *
+ * Calculates checksum for 'len' bytes starting at 'dataptr'
+ * accumulator size limits summable length to 64k
+ * host endianess is irrelevant (p3 RFC1071)
+ * ** the caller must invert bits for Internet sum ! **
+ * source: LwIP v2.0.2 inet_checksum.c
+ *
+ * param:  dataptr points to start of data to be summed at any boundary
+ *         len length of data to be summed
+ * return: host order (!) checksum (non-inverted Internet sum)
+ *
+ */
+uint16_t stack_checksum(const void *dataptr, int len)
+{
+    uint32_t        acc;
+    uint16_t        src;
+    const uint8_t  *octetptr;
+
+    acc = 0;
+    /* dataptr may be at odd or even addresses */
+    octetptr = (const uint8_t*)dataptr;
+    while (len > 1)
+    {
+        /* declare first octet as most significant
+           thus assume network order, ignoring host order */
+        src = (*octetptr) << 8;
+        octetptr++;
+        /* declare second octet as least significant */
+        src |= (*octetptr);
+        octetptr++;
+        acc += src;
+        len -= 2;
+    }
+
+    if (len > 0)
+    {
+        /* accumulate remaining octet */
+        src = (*octetptr) << 8;
+        acc += src;
+    }
+
+    /* add deferred carry bits */
+    acc = (acc >> 16) + (acc & 0x0000ffffUL);
+    if ((acc & 0xffff0000UL) != 0)
+    {
+        acc = (acc >> 16) + (acc & 0x0000ffffUL);
+    }
+
+    /* reorder sum, the caller must invert bits for Internet sum ! */
+    return stack_byteswap((uint16_t)acc);
 }
 
 /*------------------------------------------------

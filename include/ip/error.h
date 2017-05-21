@@ -11,6 +11,8 @@
 #ifndef __IP4ERROR_H__
 #define __IP4ERROR_H__
 
+#define PRNT_FUNC   {} //printf("%s\n",__func__)
+
 typedef enum                    // stack wide error codes
 {
     ERR_OK       =  0,          // no errors, result ok

@@ -15,7 +15,14 @@
 #include    <stdio.h>               // @@ for printf() debug only
 
 #include    "ip/arp.h"
+#include    "ip/ipv4.h"
 #include    "ip/stack.h"
+
+/* -----------------------------------------
+   static functions
+----------------------------------------- */
+static ip4_err_t arp_send(struct net_interface_t* const, hwaddr_t*, hwaddr_t*,
+                          uint16_t, hwaddr_t*, ip4_addr_t, hwaddr_t*, ip4_addr_t);
 
 /* -----------------------------------------
  * arp_query()
@@ -25,7 +32,7 @@
  * The function uses the IP address as the key for the serach
  *
  * param:  netif the network interface and IP address to search
- * return: pointer to HW address if found, or NULL is not
+ * return: pointer to HW address if found, or NULL if not
  *
  */
 hwaddr_t* const arp_query(struct net_interface_t* const netif,
@@ -48,9 +55,9 @@ hwaddr_t* const arp_query(struct net_interface_t* const netif,
 }
 
 /* -----------------------------------------
- * arp_add_entry()
+ * arp_tbl_entry()
  *
- * This function adds an ARP entry to the table.
+ * This function adds or updates an ARP entry to the table.
  * the function uses the ipAddress as the key and the
  * hwAddr and flags as the values.
  *
@@ -58,65 +65,45 @@ hwaddr_t* const arp_query(struct net_interface_t* const netif,
  * return: ERR_OK if entry was added, ip4_err_t if not
  *
  */
-ip4_err_t arp_add_entry(struct net_interface_t* const netif,
+ip4_err_t arp_tbl_entry(struct net_interface_t* const netif,
                         ip4_addr_t ipAddr,
                         hwaddr_t hwAddr,
                         arp_flags_t flags)
 {
     int         i;
+    int         freeSlot = -1;
     ip4_err_t   result = ERR_ARP_FULL;
 
-    for (i = 0; i < ARP_TABLE_LENGTH; i++)
+    for (i = 0; i < ARP_TABLE_LENGTH; i++)                                              // first scan table to
     {
-        if ( (netif->arpTable[i].flags & (ARP_FLAG_STATIC | ARP_FLAG_DYNA)) == 0 )  // check if table entry is free
+        if ( netif->arpTable[i].ipAddress == ipAddr )                                   // check if IP address exists
         {
-            netif->arpTable[i].ipAddress = ipAddr;                                  // add the ARP information
-            copy_hwaddr(netif->arpTable[i].hwAddress, hwAddr);
+            copy_hwaddr(netif->arpTable[i].hwAddress, hwAddr);                          // update the ARP information
+            netif->arpTable[i].flags &= ~(ARP_FLAG_STATIC | ARP_FLAG_DYNA);
             netif->arpTable[i].flags |= flags;
-            netif->arpTable[i].lru = 0;
+            netif->arpTable[i].lru = 0;                                                 // reset LRU counter
             result = ERR_OK;
-            break;
+            freeSlot = -1;                                                              // entry updated, no need to add it
+            break;                                                                      // entry update, so done and exit scan loop here
         }
+        if ( (netif->arpTable[i].flags & (ARP_FLAG_STATIC | ARP_FLAG_DYNA)) == 0 )      // look for a free slot as we traverse the table
+            freeSlot = i;                                                               // and mark for later, just in case we need to 'add'
+    }
+
+    if ( freeSlot != -1 )                                                               // entry needs to be added
+    {
+        netif->arpTable[freeSlot].ipAddress = ipAddr;                                   // add the ARP information
+        copy_hwaddr(netif->arpTable[freeSlot].hwAddress, hwAddr);
+        netif->arpTable[freeSlot].flags |= flags;
+        netif->arpTable[freeSlot].lru = 0;
+        result = ERR_OK;
     }
 
     /* scan LRU values, and evict
      * a slot with ARP_FLAG_DYNA and the lowest LRU count
+     * then add the entry into the evicted slot
      *
      */
-
-    return result;
-}
-
-/* -----------------------------------------
- * arp_update_entry()
- *
- * This function updates an ARP entry in the table.
- * the function uses the ipAddress as the key and the hwAddr as the value
- *
- * param:  netif the network interface and IP and HW address and flags
- * return: ERR_OK if entry was added, ip4_err_t if not
- *
- */
-ip4_err_t arp_update_entry(struct net_interface_t* const netif,
-                           ip4_addr_t ipAddr,
-                           hwaddr_t hwAddr,
-                           arp_flags_t flags)
-{
-    int         i;
-    ip4_err_t   result = ERR_ARP_NONE;
-
-    for (i = 0; i < ARP_TABLE_LENGTH; i++)
-    {
-        if ( netif->arpTable[i].ipAddress == ipAddr )           // check if IP address exists
-        {
-            copy_hwaddr(netif->arpTable[i].hwAddress, hwAddr);  // update the ARP information
-            netif->arpTable[i].flags &= ~(ARP_FLAG_STATIC | ARP_FLAG_DYNA);
-            netif->arpTable[i].flags |= flags;
-            netif->arpTable[i].lru = 0;                         // reset LRU counter
-            result = ERR_OK;
-            break;
-        }
-    }
 
     return result;
 }
@@ -136,7 +123,7 @@ struct arp_tbl_t* const arp_show(void)
 }
 
 /* -----------------------------------------
- * link_packet_handler()
+ * arp_input()
  *
  * This function is the link layer packet handler for handling incoming ARP.
  * packet are forwarded here from the input interface and will be parsed for ARP
@@ -152,7 +139,7 @@ struct arp_tbl_t* const arp_show(void)
  * this function does the following:
  * 1. examine type field
  * 2. process ARP request
- * 3. forward IPV$ type to network layer
+ * 3. forward IPv4 type to network layer
  * 4. discard all the rest
  *
  * param:  packet buffer pointer and netif the network interface
@@ -160,79 +147,54 @@ struct arp_tbl_t* const arp_show(void)
  * return: none
  *
  */
-void arp_packet_handler(struct pbuf_t* const p,
-                        struct net_interface_t* const netif)
+void arp_input(struct pbuf_t* const p, struct net_interface_t* const netif)
 {
     struct ethernet_frame_t *frame;
-    struct ethernet_frame_t *arp_resp_hdr;
-    struct arp_t            *arp_resp;
     struct arp_t            *arp;
-    struct pbuf_t           *arp_reply;
 
-    frame = (struct ethernet_frame_t*) p->pbuf;     // recast frame structure
-    arp   = (struct arp_t*) &frame->payloadStart;   // pointer to ARP data payload
+    PRNT_FUNC;
 
-    switch ( BEtoLE(frame->type) )
+    frame = (struct ethernet_frame_t*) p->pbuf;             // recast frame structure
+    arp   = (struct arp_t*) &frame->payloadStart;           // pointer to ARP data payload
+
+    switch ( stack_byteswap(frame->type) )                  // determine frame type
     {
-    case TYPE_ARP:
+        case TYPE_ARP:                                     // handle ARP frames
 /*
-        printf("ARP\n htype %04x ptype %04x op %04x tpa %08lx myip %08lx\n",
-                BEtoLE(arp->htype),
-                BEtoLE(arp->ptype),
-                BEtoLE(arp->oper),
-                arp->tpa,
-                netif->ip4addr);
+            printf(" [arp] htype %04x ptype %04x op %04x spa %08lx tpa %08lx\n",
+                 stack_byteswap(arp->htype),
+                 stack_byteswap(arp->ptype),
+                 stack_byteswap(arp->oper),
+                 arp->spa,
+                 arp->tpa);
 */
-        if ( BEtoLE(arp->htype) != ARP_ETH_TYPE || BEtoLE(arp->ptype) != TYPE_IPV4 )
-            break;                                  // drop the packet if not matching on network and protocol type
-        switch ( BEtoLE(arp->oper) )                // action is based on the operation indicator
-        {
-        case ARP_OP_REQUEST:
-            if ( arp->tpa == netif->ip4addr )       // is someone looking for us?
+            if ( stack_byteswap(arp->htype) != ARP_ETH_TYPE || stack_byteswap(arp->ptype) != TYPE_IPV4 )
+                break;                                      // drop the packet if not matching on network and protocol type
+            switch ( stack_byteswap(arp->oper) )            // action is based on the operation indicator
             {
-                arp_reply = pbuf_allocate(TX);
-                assert(arp_reply);                  // @@ error handling on buffer depletion, or just give up and drop packet until buffers free up?
-                if ( arp_reply != NULL )
-                {
-                    arp_resp_hdr = (struct ethernet_frame_t*) arp_reply->pbuf;
+                case ARP_OP_REQUEST:
+                    if ( arp->tpa == netif->ip4addr )       // is someone looking for us?
+                    {
+                        arp_send(netif, frame->src, netif->hwaddr,
+                                 ARP_OP_REPLY, netif->hwaddr, netif->ip4addr, arp->sha, arp->spa);
+                    }
+                    break;
 
-                    copy_hwaddr(arp_resp_hdr->dest, frame->src);                // build header
-                    copy_hwaddr(arp_resp_hdr->src, netif->hwaddr);
-                    arp_resp_hdr->type = BEtoLE(TYPE_ARP);
+                case ARP_OP_REPLY:                          // use replies to update the table
+                    arp_tbl_entry(netif, arp->spa, arp->sha, ARP_FLAG_DYNA);
+                    break;
 
-                    arp_resp = (struct arp_t*) &(arp_resp_hdr->payloadStart);   // build ARP response packet
-                    arp_resp->htype = BEtoLE(ARP_ETH_TYPE);
-                    arp_resp->ptype = BEtoLE(TYPE_IPV4);
-                    arp_resp->hlen = ARP_HLEN;
-                    arp_resp->plen = ARP_PLEN;
-                    arp_resp->oper = BEtoLE(ARP_OP_REPLY);
-                    copy_hwaddr(arp_resp->sha, netif->hwaddr);
-                    arp_resp->spa = netif->ip4addr;
-                    copy_hwaddr(arp_resp->tha, arp->sha);
-                    arp_resp->tpa = arp->spa;
-
-                    arp_reply->len = sizeof(struct ethernet_frame_t) + sizeof(struct arp_t);
-                    netif->linkoutput(netif->state, arp_reply);                 // send the ARP response
-                    pbuf_free(arp_reply);
-                }
+                default:;                                   // drop the packet
             }
-            break;
+            break;  /* end of handling TYPE_ARP */
 
-        case ARP_OP_REPLY:                          // use replies to update the table
-            arp_add_entry(netif, arp->spa, arp->sha, ARP_FLAG_DYNA);
-            break;
+        case TYPE_IPV4:                                     // forward regular IPv4 frames
+            ip4_input(p, netif);                            // all inputs go here from any network interface
+            break;  /* end of handling TYPE_IPV4 */
 
-        default:;                                   // drop the packet
-        }
-        break;
-
-    case TYPE_IPV4:
-        printf(" IPv4\n");
-        break;
-
-    default:
-        inputStub(p, netif);
-    }
+        default:
+            inputStub(p, netif);                            // drop everything else @@ handle unidentified frame type
+    } /* end of frame type switch */
 }
 
 /* -----------------------------------------
@@ -240,62 +202,111 @@ void arp_packet_handler(struct pbuf_t* const p,
  *
  * This function is the link layer packet handler for handling outgoing packets
  * that require address resolution ARP.
- * packet are forwarded here IP addresses are resolved to network MAC addresses
- * and sent using low_level_output()
+ * packets are forwarded here, IP addresses are resolved to network MAC addresses
+ * and sent
  *
  * param:  packet buffer pointer and netif the network interface
  *         structure for this ethernet interface
  * return: ERR_OK if no errors or error level from ip4_err_t
  *
  */
-ip4_err_t arp_output(struct net_interface_t* const netif,
-                     struct pbuf_t* const p)
+ip4_err_t arp_output(struct net_interface_t* const netif, struct pbuf_t* const p)
 {
     struct ethernet_frame_t *frame;
-    struct ip_packet_t      *ipHeader;
-    struct arp_t            *arpReq;
-    struct pbuf_t           *arpQ;
+    struct ip_header_t      *ipHeader;
     hwaddr_t                *hwaddr;
     ip4_err_t                result;
 
+    PRNT_FUNC;
+
     frame = (struct ethernet_frame_t*) p->pbuf;                 // establish pointer to etherner frame
-    ipHeader = (struct ip_packet_t*) &(frame->payloadStart);    // establish pointer to IP header
+    ipHeader = (struct ip_header_t*) &(frame->payloadStart);    // establish pointer to IP header
+
+/*
+    {
+        int     i,j;
+        printf(" seek %08lx\n",ipHeader->destIp);
+        for (i = 0; i < ARP_TABLE_LENGTH; i++)
+        {
+            printf(" %08lx  ", netif->arpTable[i].ipAddress);
+            for (j = 0; j < 6; j++)
+                printf("%02x:",netif->arpTable[i].hwAddress[j]);
+            printf("\n");
+        }
+    }
+*/
 
     hwaddr = arp_query(netif, ipHeader->destIp);                // extract destination IP and search the ARP table
 
-    if ( hwaddr )                                               // was and entry found in the table?
-    {                                                           // yes...
+    if ( hwaddr )                                               // was an entry found in the table?
+    {                                                           // yes,
         copy_hwaddr(frame->src, netif->hwaddr);                 // copy source HW address as our address
         copy_hwaddr(frame->dest, hwaddr);                       // copy destination HW address
-        frame->type = BEtoLE(TYPE_IPV4);                        // IPv4 frame type
-        result = netif->linkoutput(netif->state, p);            // send the frame *** p->len should already be set ***
+        frame->type = stack_byteswap(TYPE_IPV4);                // IPv4 frame type
+        if ( netif->linkoutput )
+            result = netif->linkoutput(netif->state, p);        // send the frame *** p->len should already be set ***
+    }
+    else
+    {                                                           // no,
+        arp_send(netif, netif->broadcast, netif->hwaddr,        // send an ARP request to resolve the IP address
+                 ARP_OP_REQUEST, netif->hwaddr, netif->ip4addr, netif->broadcast, ipHeader->destIp);
+        result = ERR_ARP_NONE;                                  // indicate that address resolution failed
+    }
+
+    return result;
+}
+
+/* -----------------------------------------
+ * arp_send()
+ *
+ *  This function sends an ARP packet after assembling it.
+ *  It uses link_output()
+ *
+ * param:  packet buffer pointer and netif the network interface
+ *         structure for this ethernet interface
+ * return: ERR_OK if no errors or error level from ip4_err_t
+ *
+ */
+static ip4_err_t arp_send(struct net_interface_t* const netif, hwaddr_t *dest, hwaddr_t *src,
+                          uint16_t oper, hwaddr_t *sha, ip4_addr_t spa, hwaddr_t *tha, ip4_addr_t tpa)
+{
+    struct pbuf_t           *p;
+    struct ethernet_frame_t *frame;
+    struct arp_t            *arp;
+    ip4_err_t                result = ERR_NETIF;
+
+    PRNT_FUNC;
+
+    p = pbuf_allocate(TX);                                      // allocation a transmit buffer
+    if ( p )
+    {
+        frame = (struct ethernet_frame_t*) p->pbuf;             // establish pointer to etherner frame
+        copy_hwaddr(frame->dest, dest);                         // build request header
+        copy_hwaddr(frame->src, src);
+        frame->type = stack_byteswap(TYPE_ARP);
+
+        arp = (struct arp_t*) &(frame->payloadStart);           // establish pointer to ARP request packet
+        arp->htype = stack_byteswap(ARP_ETH_TYPE);              // build ARP packet
+        arp->ptype = stack_byteswap(TYPE_IPV4);
+        arp->hlen = ARP_HLEN;
+        arp->plen = ARP_PLEN;
+        arp->oper = stack_byteswap(oper);
+        copy_hwaddr(arp->sha, sha);
+        arp->spa = spa;
+        copy_hwaddr(arp->tha, tha);
+        arp->tpa = tpa;
+
+        p->len = FRAME_HDR_LEN + ARP_LEN;
+        if ( netif->linkoutput )
+            result = netif->linkoutput(netif->state, p);        // send the frame
         pbuf_free(p);                                           // free the pbuf
     }
     else
-    {                                                           // no...
-        pbuf_free(p);                                           // discard the frame to be sent ( @@ is this the right thing to do? )
-        arpQ = pbuf_allocate(TX);                               // allocate a pbuf for an ARP query
-        frame = (struct ethernet_frame_t*) arpQ->pbuf;          // establish pointer to etherner frame
-        arpReq = (struct arp_t*) &(frame->payloadStart);        // establish pointer to ARP request packet
-
-        copy_hwaddr(frame->dest, netif->broadcast);             // build request header as broadcast
-        copy_hwaddr(frame->src, netif->hwaddr);
-        frame->type = BEtoLE(TYPE_ARP);
-
-        arpReq->htype = BEtoLE(ARP_ETH_TYPE);                   // build ARP request packet
-        arpReq->ptype = BEtoLE(TYPE_IPV4);
-        arpReq->hlen = ARP_HLEN;
-        arpReq->plen = ARP_PLEN;
-        arpReq->oper = BEtoLE(ARP_OP_REQUEST);
-        copy_hwaddr(arpReq->sha, netif->hwaddr);
-        arpReq->spa = netif->ip4addr;
-        copy_hwaddr(arpReq->tha, netif->broadcast);
-        arpReq->tpa = ipHeader->destIp;
-
-        arpQ->len = sizeof(struct ethernet_frame_t) + sizeof(struct arp_t);
-        result = netif->linkoutput(netif->state, arpQ);         // send the frame
-        pbuf_free(arpQ);                                        // free the pbuf
+    {
+        result = ERR_MEM;                                       // buffer allocation failed
     }
+
+    printf(" result %d\n", result);
 
     return result;
 }

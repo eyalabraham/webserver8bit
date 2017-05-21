@@ -13,8 +13,8 @@
 
 #include    <sys/types.h>
 
-#include    "ip/error.h"
 #include    "ip/options.h"
+#include    "ip/error.h"
 #include    "ip/types.h"
 
 /* -----------------------------------------
@@ -28,8 +28,9 @@ void          stack_timers(void);                           // handle stack time
 struct pbuf_t* const pbuf_allocate(pbuf_type_t);            // allocate a transmit or receive buffer
 void          pbuf_free(struct pbuf_t* const);              // free a buffer allocation
 
-uint16_t      BEtoLE(uint16_t);                             // big-endian to little-endian
-
+void          stack_sig(stack_sig_t);                       // signal stack events
+uint16_t      stack_byteswap(uint16_t);                     // big-endian to little-endian 16bit bytes swap
+uint16_t      stack_checksum(const void*, int);             // checksum calculation
 void          inputStub(struct pbuf_t* const,               // input stub function
                         struct net_interface_t* const);
 ip4_err_t     outputStub(struct net_interface_t* const,     // output stub function

@@ -17,7 +17,7 @@
 #include    "ip/options.h"
 
 /* -----------------------------------------
-   IPv4
+   Ethernet and IPv4
 ----------------------------------------- */
 #define     HW_ADDR_LENGTH          6           // for IPv4 this is always 6
 
@@ -37,21 +37,6 @@ struct ethernet_frame_t
     hwaddr_t    src;                            // MAC address of source
     uint16_t    type;                           // ethernet type
     uint8_t     payloadStart;                   // the *address* of this byte is the pointer to the start of the IP packet
-};
-
-struct ip_packet_t                              // https://en.wikipedia.org/wiki/Network_packet
-{
-    uint8_t     verHeaderLength;                // version (top 4 bits) and header length (bottom 4 bits)
-    uint8_t     qos;                            // quality of service
-    uint16_t    length;                         // packet length in bytes
-    uint16_t    id;                             // packet ID for reassembly
-    uint16_t    defrag;                         // fragment offset and flags
-    uint8_t     ttl;                            // time to live
-    uint8_t     protocol;                       // protocol ID TCP, UDP, ICMP, etc
-    uint16_t    cheksum;                        // header checksum
-    ip4_addr_t  srcIp;                          // source IP address
-    ip4_addr_t  destIp;                         // destination IP address
-    uint8_t     payloadStart;                   // the *address* of this byte is the pointer to the start of the data or the per-protocol flags
 };
 
 typedef enum                                    // https://en.wikipedia.org/wiki/EtherType
@@ -104,23 +89,50 @@ typedef enum                                    // https://en.wikipedia.org/wiki
     TYPE_VLAN2TAG = 0x9100                      // VLAN-tagged (IEEE 802.1Q) frame with double tagging
 } ether_type_t;
 
-/* -----------------------------------------
-   Packet buffer
------------------------------------------ */
-#define     PBUF_FREE               0           // packet buffer is free to use
-#define     PBUF_MARKED            -1           // packet buffer is in use, but not populated with data
+#define     IP_VER          0x40                // IPv4 version
+#define     IP_IHL          0x05                // default header length
+#define     IP_QOS          0                   // best effort, no congestion control possible
+#define     IP_FLAG_DF      0x4000              // don't fragment on send
+#define     IP_FLAG_MF      0x2000              // more fragments when receiving fragmented packets
+#define     IP_TTL          64                  // default TTL value
+
+struct ip_header_t                              // https://en.wikipedia.org/wiki/Network_packet
+{
+    uint8_t     verHeaderLength;                // version (top 4 bits) and header length (bottom 4 bits)
+    uint8_t     qos;                            // quality of service
+    uint16_t    length;                         // packet length in bytes
+    uint16_t    id;                             // packet ID for reassembly
+    uint16_t    defrag;                         // fragment offset and flags
+    uint8_t     ttl;                            // time to live
+    uint8_t     protocol;                       // protocol ID: TCP, UDP, ICMP, etc (ip4_protocol_t)
+    uint16_t    checksum;                       // header checksum
+    ip4_addr_t  srcIp;                          // source IP address
+    ip4_addr_t  destIp;                         // destination IP address
+    uint8_t     payloadStart;                   // the *address* of this byte is the pointer to the IP options or the per-protocol options
+};
 
 typedef enum
 {
-    RX,                                         // buffer type TX or RX
-    TX
-} pbuf_type_t;
+    IP4_ICMP =  1,
+    IP4_TCP  =  6,
+    IP4_UDP  = 17
+} ip4_protocol_t;
 
-struct pbuf_t
+struct icmp_t                                   // https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol
 {
-    int         len;                            // bytes count in buffer, == 0 is puffer is free
-    uint8_t     pbuf[PACKET_BUF_SIZE];          // packet buffer type
+    uint16_t    type_code;                      // ICMP type and subtype (icmp_msg_t)
+    uint16_t    checksum;                       // ICMP header and data checksum
+    uint16_t    id;                             // identifier
+    uint16_t    seq;                            // sequence number
+    uint8_t     payloadStart;                   // the *address* of this byte is the pointer to the start of the ICMP optional payload
 };
+
+typedef enum
+{
+    ECHO_REPLY = 0x0000,                        // Echo reply to a ping
+    ECHO_REQ = 0x0800,                          // Echo request (used by ping)
+    ROUTER_SOLIC = 0x0a00                       // sent to any routers to get their info
+} icmp_msg_t;
 
 /* -----------------------------------------
    ARP
@@ -161,6 +173,24 @@ struct arp_tbl_t                                // data structure of ARP table e
 };
 
 /* -----------------------------------------
+   Packet buffer
+----------------------------------------- */
+#define     PBUF_FREE               0           // packet buffer is free to use
+#define     PBUF_MARKED            -1           // packet buffer is in use, but not populated with data
+
+typedef enum
+{
+    RX,                                         // buffer type TX or RX
+    TX
+} pbuf_type_t;
+
+struct pbuf_t
+{
+    int         len;                            // bytes count in buffer, == 0 is puffer is free
+    uint8_t     pbuf[PACKET_BUF_SIZE];          // packet buffer type
+};
+
+/* -----------------------------------------
    Network interface
 ----------------------------------------- */
 #define     IF_FLAG_INIT            NETIF_FLAG_NONE
@@ -177,9 +207,8 @@ struct net_interface_t                                          // general netwo
     ip4_addr_t  ip4addr;                                        // IPv4 address association
     ip4_addr_t  subnet;                                         // IPv4 subnet mask
     ip4_addr_t  gateway;                                        // IPv4 gateway
-    uint16_t    mtu;                                            // MTU size
     uint8_t     flags;                                          // status flags
-    char        name[ETHIF_NAME_LENGTH];                        // two-character name identifier
+    char        name[ETHIF_NAME_LENGTH];                        // interface name identifier string
     uint32_t    sent;                                           // sent frames count
     uint32_t    recv;                                           // received frames count
     uint32_t    rxDrop;                                         // dropped frames count
@@ -187,29 +216,45 @@ struct net_interface_t                                          // general netwo
     struct arp_tbl_t arpTable[ARP_TABLE_LENGTH];                // this isterface's ARP table
     void       *state;                                          // pointer to interface's ethernet driver 'private' data
 
-    struct enc28j60_t* (*driver_init)(void);                    // pointer to HW and driver initialization function
-
+    ip4_err_t   (*output)(struct net_interface_t* const,        // packet output function with address resolution,
+                          struct pbuf_t* const);                // first resolve HW address then send with 'linkoutput'
     void        (*forward_input)(struct pbuf_t* const,          // forward data to next layer   // @@ don't think we need a 'netif' here?
                                  struct net_interface_t* const);
 
-    ip4_err_t   (*output)(struct net_interface_t* const,        // packet output function with address resolution,
-                          struct pbuf_t* const);                // first resolve HW address then send with 'linkoutput'
-
-    struct pbuf_t* const (*linkinput)(struct enc28j60_t* const);// link input function, set to low_level_input()
-
+    struct pbuf_t* const (*linkinput)(struct enc28j60_t* const);// link input function, set to link_input()
     ip4_err_t   (*linkoutput)(struct enc28j60_t*,               // packet output function, send data buffer as-is
-                              struct pbuf_t* const);            // set to low_level_output()
+                              struct pbuf_t* const);            // set to link_output()
+    struct enc28j60_t* (*driver_init)(void);                    // pointer to HW and driver initialization function
+    int         (*linkstate)(void);                             // check and return link state 'up' or 'down'
                                                                 // @@ 'linkstate' link state change call-back function
 };
 
 /* -----------------------------------------
    IPv4 stack main data structure
 ----------------------------------------- */
+#define     FRAME_HDR_LEN   (sizeof(struct ethernet_frame_t)-1)
+#define     IP_HDR_LEN      (sizeof(struct ip_header_t)-1)
+#define     ARP_LEN         sizeof(struct arp_t)
+#define     ICMP_HDR_LEN    (sizeof(struct icmp_t)-1)
+
+typedef enum                                                    // stack event signals
+{
+    SIG_TX_PACKET_DROP,
+    SIG_RX_PACKET_DROP,
+    SIG_ARP_ERROR
+} stack_sig_t;
+
 struct ip4stack_t
 {
     char                    hostname[HOSTNAME_LENGTH];          // host name string identifier
+    stack_sig_t             signal;                             // event signal
     uint8_t                 interfaceCount;                     // number of attached interfaces
     struct net_interface_t  interfaces[INTERFACE_COUNT];        // array of interface data structures
+};
+
+struct timer_t
+{
+    uint32_t    timeout;                                        // timeout
 };
 
 #endif /* __IP4TYPES_H__ */
