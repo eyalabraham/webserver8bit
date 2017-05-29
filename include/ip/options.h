@@ -50,7 +50,7 @@
  *
  */
 #define     RX_PACKET_BUFS      1           // # of input packet buffers, relying on enc28j60 8K buffering
-#define     TX_PACKET_BUFS      4           // # of output packet buffers
+#define     TX_PACKET_BUFS      2           // # of output packet buffers
 #define     MAX_PBUFS           8           // max # of RX or TX buffers
 #define     PACKET_BUF_SIZE     1536        // size of packet buffer in bytes
 
@@ -60,19 +60,6 @@
  * Network layer setup options
  *
  */
-#define     IPADDR0             192         // default IP address
-#define     IPADDR1             168
-#define     IPADDR2             1
-#define     IPADDR3             19
-
-#define     NETMASK0            255         // default network mask
-#define     NETMASK1            255
-#define     NETMASK2            255
-#define     NETMASK3            0
-
-#define     GW0                 192         // default gateway
-#define     GW1                 168
-#define     GW2                 1
-#define     GW3                 1
+#define     ROUTE_TABLE_LENGTH   2          // max number of entries in the routing table, must be .gte. to INTERFACE_COUNT
 
 #endif  /* __OPTIONS_H__ */

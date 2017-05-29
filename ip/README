@@ -9,45 +9,44 @@ in a DOS environment, and within my home-brew multi-tasking executive.
 This stack borrows several implementation ideas from LwIP.
 
 The structure of the code modules follows the OSI model, with as much flexibility as I thought
-would be useful for extending the framework for things such as more that one ethernet interface
-and varying amounts of resources dedicated to TCP connections ARP table size etc.
+would be useful. The framework can be extended for features such as more than one ethernet interface,
+or varying amounts of resources dedicated to TCP connections, an ARP table size, etc.
 
-Each module matches a layer in the OSI model, and 'plugs into' a common 'ip4stack' module.
-The 'ip4stack' module implements only IPv4 and supplies all the data structures, utilities etc
-that are used to run the stack: timers, setup/init code and so on.
+Each module matches a layer in the OSI model, and 'plugs into' a common 'stack' module.
+The 'stack' module implements only IPv4, and supplies all the data structures and utilities 
+that are used to run the stack: such as timers, setup/init code and so on.
 The stack module follows the LwIP model of call-backs. This model fit my needs for running the stack
-in a single thread environment, with no OS. So this will be either in my FlashLite NEC v25 8bit SBC DOS or
-my home-brew multi-task executive  https://sites.google.com/site/eyalabraham/robotics#software (when running
-the stack isolated in a single task).
+in a single threaded environment with no OS. This stack will be able to run in my FlashLite NEC v25
+8bit SBC DOS or my home-brew multi-task executive (https://sites.google.com/site/eyalabraham/robotics#software).
+In both cases the stack will be running as an isolated single thread.
 
 A rough ASCII sketch of the architecture and associated files:
 
- +--------------------------+
- | Stack common components  |
- | ~~~~~~~~~~~~~~~~~~~~~~~~ |
- | stack.c                  |
- | stack.h                  |
- | options.h                |
- | error.h                  |
- | types.h                  |
- |                          |
- |                          |
- |                          |
- |                          |
- |                          +-----------/\--------------\/--+
+ +--------------------------+-------------------------------+
+ | Stack common components  | Application                   |
+ | ~~~~~~~~~~~~~~~~~~~~~~~~ | ~~~~~~~~~~~~                  |
+ | stack.c                  |                               |
+ | stack.h                  |                               |
+ | options.h                |                               |
+ | error.h                  |                               |
+ | types.h                  +-----------/\--------------\/--+
+ |                          | Transport                     |
+ |                          | ~~~~~~~~~~                    |
+ |                          | udp.c  tcp.c  icmp.c          |
+ |                          | ump.h  tcp.h  icmp.h          |
+ |                          |                               |           ip4_output()
+ |                          +-----------/\--------------\/--+ <----- [registered function per transport]
  |                          | Network                       |
  |                          | ~~~~~~~~                      |
  |                          | ipv4.c                        |
  |                          | ipv4.h                        |
- |                          | icmp.c                        |
- |                          | icmp.h                        |
  |                          |                               |           arp_output()
  |                          +-----------/\----------+---\/--+-+ <--- ip4_input()
  |                          |                       |         |
  |                          | Physical & Data Link  | ARP     |
  |                          | ~~~~~~~~~~~~~~~~~~~~~ | ~~~~~~~ |
  |                          | netif.c               | arp.c   |
- |                          | netif.h               | arp.c   |
+ |                          | netif.h               | arp.h   |
  |                          |                       |         |         link_output()
  |                          | enc28j60.c            +-------+-+ <--- arp_input()
  |                          | enc28j60.h                    |

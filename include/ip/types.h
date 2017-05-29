@@ -202,11 +202,11 @@ struct pbuf_t
 
 struct net_interface_t                                          // general network interface type
 {
-    hwaddr_t    broadcast;                                      // a place to store the broadcast HW address ...
     hwaddr_t    hwaddr;                                         // interface's MAC address
     ip4_addr_t  ip4addr;                                        // IPv4 address association
     ip4_addr_t  subnet;                                         // IPv4 subnet mask
     ip4_addr_t  gateway;                                        // IPv4 gateway
+    ip4_addr_t  network;                                        // calculate bitwise: subnet & gateway
     uint8_t     flags;                                          // status flags
     char        name[ETHIF_NAME_LENGTH];                        // interface name identifier string
     uint32_t    sent;                                           // sent frames count
@@ -232,10 +232,10 @@ struct net_interface_t                                          // general netwo
 /* -----------------------------------------
    IPv4 stack main data structure
 ----------------------------------------- */
-#define     FRAME_HDR_LEN   (sizeof(struct ethernet_frame_t)-1)
-#define     IP_HDR_LEN      (sizeof(struct ip_header_t)-1)
-#define     ARP_LEN         sizeof(struct arp_t)
-#define     ICMP_HDR_LEN    (sizeof(struct icmp_t)-1)
+#define     FRAME_HDR_LEN   (sizeof(struct ethernet_frame_t)-1) // =14
+#define     IP_HDR_LEN      (sizeof(struct ip_header_t)-1)      // =20
+#define     ARP_LEN         sizeof(struct arp_t)                // =28
+#define     ICMP_HDR_LEN    (sizeof(struct icmp_t)-1)           // =8
 
 typedef enum                                                    // stack event signals
 {
@@ -244,12 +244,30 @@ typedef enum                                                    // stack event s
     SIG_ARP_ERROR
 } stack_sig_t;
 
+struct route_tbl_t                                              // source: https://en.wikipedia.org/wiki/Routing_table
+{
+    ip4_addr_t      destNet;                                    // destination network, calculated with subnet mask
+    ip4_addr_t      netMask;                                    // subnet mask
+    ip4_addr_t      gateway;                                    // default gateway
+    uint8_t         netIf;                                      // network interface
+};
+
 struct ip4stack_t
 {
     char                    hostname[HOSTNAME_LENGTH];          // host name string identifier
     stack_sig_t             signal;                             // event signal
+    uint8_t                 routeTableLength;                   // max number of entries in the route table
+    struct route_tbl_t      routeTable[ROUTE_TABLE_LENGTH];     // routing table info
     uint8_t                 interfaceCount;                     // number of attached interfaces
     struct net_interface_t  interfaces[INTERFACE_COUNT];        // array of interface data structures
+    
+    /* @@ to make this list more general, instead of named pointers
+     *    these could be replaced with an array of structure containing
+     *    a pointer to the function and a ip4_protocol_t identifier ...
+     */
+    void (*icmp_input_handler)(struct pbuf_t* const);           // ICMP response hendler
+    void (*udp_input_handler)(struct pbuf_t* const);            // UDP packet input handler
+    void (*tcp_input_handler)(struct pbuf_t* const);            // TCP packet input handler
 };
 
 struct timer_t

@@ -26,7 +26,7 @@
 #include    "ppispi.h"
 
 #include    "ip/options.h"
-#include    "../include/ip/stack.h"
+#include    "ip/stack.h"
 #include    "ip/enc28j60.h"
 #include    "ip/enc28j60-hw.h"
 
@@ -455,29 +455,29 @@ static spiDevErr_t writeMemBuffer(uint8_t *src, uint16_t address, uint16_t lengt
     if ( length == 0 )
         return SPI_WR_ERR;
 
-    if ( address != USE_CURR_ADD )                  // change address pointer or use default
+    if ( address != USE_CURR_ADD )                      // change address pointer or use default
     {
         writeControlRegister(EWRPTL, LOW_BYTE(address));
         writeControlRegister(EWRPTH, HIGH_BYTE(address));
     }
 
     if ( length == 1 )
-    {                                               // write a single byte
-        spiWriteByteKeepCS(ETHERNET_WR, OP_WBM);    // issue write memory command
-        result = spiWriteByte(ETHERNET_WR, *src);   // write a byte and release CS
+    {                                                   // write a single byte
+        spiWriteByteKeepCS(ETHERNET_WR, OP_WBM);        // issue write memory command
+        result = spiWriteByte(ETHERNET_WR, *src);       // write a byte and release CS
     }
     else
-    {                                               // read data from device memory
-        spiWriteByteKeepCS(ETHERNET_WR, OP_WBM);    // issue write memory command
+    {                                                   // write data block to device memory
+        spiWriteByteKeepCS(ETHERNET_WR, OP_WBM);        // issue write memory command
 #if DRV_DMA_IO
         dmaComplete = 0;
         result = spiWriteBlock(ETHERNET_WR, src, length, spiCallBack); // start DMA transfer
         if ( result == SPI_OK )
-            while ( !dmaComplete ) {};              // wait for DMA transfer to complete
+            while ( !dmaComplete ) {};                  // wait for DMA transfer to complete
 #else
-        for ( i = 0; i < (length-1); i++)
+        for ( i = 0; i < (length-1); i++)               // write everything except for the last byte
             spiWriteByteKeepCS(ETHERNET_WR, *(src+i));
-        result = spiWriteByte(ETHERNET_WR, *(src+i));
+        result = spiWriteByte(ETHERNET_WR, *(src+i));   // write the last byte and un-assert CS
 #endif /* DRV_DMA_IO */
     }
 
@@ -592,7 +592,7 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
     writeControlRegister(ETXNDH, HIGH_BYTE(tempU16));
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf("low_level_output()\n len=%u txBufferEnd=0x%04x\n", p->len, tempU16);
+    printf("link_output()\n len=%u txBufferEnd=0x%04x\n", p->len, tempU16);
 #endif
 
     setControlBit(ECON1, ECON1_TXRTS);                          // enable/start frame transmission
@@ -654,7 +654,7 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
     extractPacketInfo(ethif);
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf("low_level_input()\n len   %u\n next  0x%02x%02x\n stat1 0x%02x\n stat2 0x%02x\n",
+    printf("link_input()\n len   %u\n next  0x%02x%02x\n stat1 0x%02x\n stat2 0x%02x\n",
                ethif->rxStatVector.rxByteCount,
                ethif->rxStatVector.nextPacketH,
                ethif->rxStatVector.nextPacketL,
@@ -664,14 +664,14 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
 
     // Obtain the size of the packet and put it into the "len" variable.
     len = ethif->rxStatVector.rxByteCount;
+    assert(len <= PACKET_BUF_SIZE);
 
     // allocate a pbuf from the pool
     p = pbuf_allocate(RX);
 
     if (p != NULL)
     {
-        // read the waiting ethernet packet into the temporary buffer
-        assert(len <= PACKET_BUF_SIZE);
+        // read the waiting ethernet packet into the buffer
         readMemBuffer(p->pbuf, USE_CURR_ADD, len);
         // set buffer length and adjust to ignore CRC bytes
         p->len = len - 4;

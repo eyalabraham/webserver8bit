@@ -32,7 +32,7 @@
  * return: ERR_OK or any other ip4_err_t on error
  *
  * @@ variables hard coded in this function, like MAC address
- *    of function pointers should be passed as variables. this will make the
+ *    or function pointers should be passed as variables. this will make the
  *    function general for use with any link interface driver!
  *
  */
@@ -48,13 +48,6 @@ ip4_err_t interface_init(struct net_interface_t* const netif)
     netif->hwaddr[3] = MAC3;
     netif->hwaddr[4] = MAC4;
     netif->hwaddr[5] = MAC5;
-
-    netif->broadcast[0] = 0xff;                         // initialize the boradcast address
-    netif->broadcast[1] = 0xff;
-    netif->broadcast[2] = 0xff;
-    netif->broadcast[3] = 0xff;
-    netif->broadcast[4] = 0xff;
-    netif->broadcast[5] = 0xff;
 
     netif->flags = IF_FLAG_INIT;                        // device capabilities and identification
     strncpy(netif->name, ETHIF_NAME, ETHIF_NAME_LENGTH);
@@ -133,6 +126,7 @@ void interface_set_addr(struct net_interface_t* const netif,
     netif->ip4addr = ip;
     netif->subnet = netmask;
     netif->gateway = gw;
+    netif->network = gw & netmask;
 }
 
 /* -----------------------------------------
@@ -150,6 +144,11 @@ int interface_link_state(struct net_interface_t* const netif)
 
     if ( netif->linkstate )
         state = netif->linkstate();
+
+    if ( state == 1 )
+        netif->flags |= NETIF_FLAG_LINK_UP;
+    else
+        netif->flags &= ~NETIF_FLAG_LINK_UP;
 
     return state;
 }

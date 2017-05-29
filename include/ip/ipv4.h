@@ -18,7 +18,7 @@
 /* -----------------------------------------
    IPv4 network layer functions
 ----------------------------------------- */
-void        ip4_input(struct pbuf_t* const, struct net_interface_t* const);
-ip4_err_t   ip4_output(struct pbuf_t* const);
+void      ip4_input(struct pbuf_t* const, struct net_interface_t* const);   // input IPv4 packet
+ip4_err_t ip4_output(ip4_addr_t, ip4_protocol_t, struct pbuf_t* const);     // output an IPv4 packet
 
 #endif /* __IPV4_H__ */

@@ -35,6 +35,7 @@ include $(IPDIR)/ipStackFiles.mk
 COREOBJ=$(STACKCORE:.c=.o)
 NETIFOBJ=$(INTERFACE:.c=.o)
 NETWORKOBJ=$(NETWORK:.c=.o)
+TRANSPORTOBJ=$(TRANSPORT:.c=.o)
 
 #------------------------------------------------------------------------------------
 # build utilities
@@ -127,6 +128,7 @@ ip: ipnetif ipcore
 ipcore: $(COREOBJ)
 ipnetif: $(NETIFOBJ)
 ipnetwork: $(NETWORKOBJ)
+iptransport: $(TRANSPORTOBJ)
 
 #------------------------------------------------------------------------------------
 # build spitest.exe test program
@@ -145,7 +147,7 @@ ethtest: ethtest.exe
 
 ethtest.o: ethtest.c
 
-ethtest.exe: ethtest.o ppispi.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ)
+ethtest.exe: ethtest.o ppispi.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ) $(TRANSPORTOBJ)
 	$(LINK) $(ETHTESTLINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
 
 #------------------------------------------------------------------------------------

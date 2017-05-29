@@ -20,20 +20,27 @@
 /* -----------------------------------------
    IPv4 interface and utility functions
 ----------------------------------------- */
-void          stack_init(void);                             // initialize the IP stack
-struct net_interface_t* const stack_get_ethif(uint8_t);     // get pointer to an interface on the stack
-uint32_t      stack_time(void);                             // return stack time in mSec
-void          stack_timers(void);                           // handle stack timers and timeouts for all network interfaces
+void                            stack_init(void);                                       // initialize the IP stack
+struct net_interface_t* const   stack_get_ethif(uint8_t);                               // get pointer to an interface on the stack
+ip4_err_t                       stack_set_route(ip4_addr_t, ip4_addr_t, uint8_t);       // add a route to the route table
+struct route_tbl_t* const       stack_get_route(uint8_t);                               // get pointer to route table entry
+ip4_err_t                       stack_clear_route(uint8_t);                             // clear route table entry
+uint32_t                        stack_time(void);                                       // return stack time in mSec
+void                            stack_timers(void);                                     // handle stack timers and timeouts for all network interfaces
+void                            stack_set_protocol_handler(ip4_protocol_t,              // setup input handler per protocol
+                                                           void (*)(struct pbuf_t* const));
 
-struct pbuf_t* const pbuf_allocate(pbuf_type_t);            // allocate a transmit or receive buffer
-void          pbuf_free(struct pbuf_t* const);              // free a buffer allocation
+struct pbuf_t* const            pbuf_allocate(pbuf_type_t);                             // allocate a transmit or receive buffer
+void                            pbuf_free(struct pbuf_t* const);                        // free a buffer allocation
 
-void          stack_sig(stack_sig_t);                       // signal stack events
-uint16_t      stack_byteswap(uint16_t);                     // big-endian to little-endian 16bit bytes swap
-uint16_t      stack_checksum(const void*, int);             // checksum calculation
-void          inputStub(struct pbuf_t* const,               // input stub function
-                        struct net_interface_t* const);
-ip4_err_t     outputStub(struct net_interface_t* const,     // output stub function
-                         struct pbuf_t* const);
+void                            stack_sig(stack_sig_t);                                 // signal stack events
+uint16_t                        stack_byteswap(uint16_t);                               // big-endian to little-endian 16bit bytes swap
+uint16_t                        stack_checksum(const void*, int);                       // checksum calculation
+char*                           stack_ip4addr_ntoa(ip4_addr_t, char* const, uint8_t);   // convert network address to string representation
+
+void                            inputStub(struct pbuf_t* const,                         // input stub function
+                                          struct net_interface_t* const);
+ip4_err_t                       outputStub(struct net_interface_t* const,               // output stub function
+                                           struct pbuf_t* const);
 
 #endif /* __IP4STACK_H__ */

@@ -14,8 +14,9 @@ INTERFACE=$(IPDIR)/enc28j60.c \
 NETWORK=$(IPDIR)/ipv4.c
 
 # transport layer
-TRANSPORT=$(IPDIR)/tcp.c \
-	$(IPDIR)/udp.c
+TRANSPORT= $(IPDIR)/icmp.c \
+#	$(IPDIR)/tcp.c
+#	$(IPDIR)/udp.c
 
 # application layer
 APPLICATION=$(IPDIR)/ntp.c \

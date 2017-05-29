@@ -30,5 +30,6 @@ void      arp_input(struct pbuf_t* const,                   // link layer packet
                     struct net_interface_t* const);
 ip4_err_t arp_output(struct net_interface_t* const,         // packet output function with address resolution,
                      struct pbuf_t* const);
+ip4_err_t arp_gratuitous(struct net_interface_t* const);    // send a gratuitous ARP message
 
 #endif /* __ARP_H__ */

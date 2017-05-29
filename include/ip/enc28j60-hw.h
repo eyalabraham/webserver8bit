@@ -123,9 +123,9 @@ struct enc28j60_t
 #define     INIT_MAMXFL         1518            // max frame size of 1518 bytes
 
 #if FULL_DUPLEX
-#define     INIT_MABBIPG        0x15            // transmistion packet gap definitions
+#define     INIT_MABBIPG        0x15            // transmission packet gap definitions
 #else
-#define     INIT_MABBIPG        0x12            // transmistion packet gap definitions
+#define     INIT_MABBIPG        0x12            // transmission packet gap definitions
 #endif
 #define     INIT_MAIPGL         0x12
 #define     INIT_MAIPGH         0x0C

@@ -26,9 +26,10 @@
 /* -----------------------------------------
    module globals
 ----------------------------------------- */
-static struct ip4stack_t   stack;                                  // IP stack data structure
-static struct pbuf_t       txPbuf[TX_PACKET_BUFS];                 // transmit and
-static struct pbuf_t       rxPbuf[RX_PACKET_BUFS];                 // receive buffer pointers
+struct ip4stack_t   stack;                                          // IP stack data structure
+
+static struct pbuf_t       txPbuf[TX_PACKET_BUFS];                  // transmit and
+static struct pbuf_t       rxPbuf[RX_PACKET_BUFS];                  // receive buffer pointers
 
 
 /*------------------------------------------------
@@ -76,6 +77,75 @@ struct net_interface_t* const stack_get_ethif(uint8_t num)
 }
 
 /*------------------------------------------------
+ * stack_set_route()
+ *
+ *  setup a route table entry
+ *
+ *  param:  subnet mask and gateway in four octet format, network interface number
+ *  return: ERR_OK if entry was set or ip4_err_t if value if not
+ *
+ */
+ip4_err_t stack_set_route(ip4_addr_t nm, ip4_addr_t gw, uint8_t netif_num)
+{
+    int         i;
+    ip4_err_t   result = ERR_RT_FULL;
+
+    for (i = 0; i < ROUTE_TABLE_LENGTH; i++)            // scan the route table
+    {
+        if ( stack.routeTable[i].destNet == 0 )         // for en empty slot
+        {
+            stack.routeTable[i].destNet = gw & nm;      // an populate with the route parameters
+            stack.routeTable[i].netMask = nm;
+            stack.routeTable[i].gateway = gw;
+            stack.routeTable[i].netIf   = netif_num;
+            result = ERR_OK;
+        }
+    }
+
+    return result;
+}
+
+/*------------------------------------------------
+ * stack_get_route()
+ *
+ *  return a pointer to a route table entry
+ *
+ *  param:  zero-based entry index number
+ *  return: NULL if index out of range, pointer to an entry if in range of table length
+ *          the entry could be empty (all zeros)
+ *
+ */
+struct route_tbl_t* const stack_get_route(uint8_t route)
+{
+    if ( route >= ROUTE_TABLE_LENGTH )                              // check if entry is valid
+        return NULL;
+
+    return ( stack.routeTable[route].gateway != 0 ? &(stack.routeTable[route]) : NULL );    // return a pointer to it
+}
+
+/*------------------------------------------------
+ * stack_clear_route()
+ *
+ *  clear a route table entry
+ *
+ *  param:  zero-based entry index number
+ *  return: ERR_OK if entry was set or ip4_err_t if value if not
+ *
+ */
+ip4_err_t stack_clear_route(uint8_t route)
+{
+    if ( route >= ROUTE_TABLE_LENGTH )                  // check if entry is valid
+        return ERR_RT_RANGE;
+
+    stack.routeTable[route].destNet = 0;                // clear the route parameters
+    stack.routeTable[route].netMask = 0;
+    stack.routeTable[route].gateway = 0;
+    stack.routeTable[route].netIf   = 0;
+
+    return ERR_OK;
+}
+
+/*------------------------------------------------
  * stack_time()
  *
  *  return stack time in mSec
@@ -91,10 +161,10 @@ uint32_t stack_time(void)
     uint32_t            dosTimetic;                 // DOS time tick temp
 
     _dos_gettime(&sysTime);                         // get system time
-    dosTimetic = (uint32_t) sysTime.hsecond +
-                 (uint32_t) (100 * sysTime.second) +
-                 (uint32_t) (6000 * sysTime.minute) +
-                 (uint32_t) (360000 * sysTime.hour);
+    dosTimetic = (uint32_t) (10 * sysTime.hsecond) +
+                 (uint32_t) (1000 * sysTime.second) +
+                 (uint32_t) (60000 * sysTime.minute) +
+                 (uint32_t) (3600000 * sysTime.hour);
     return dosTimetic;
 #endif  /* SYSTEM_DOS */
 #if  SYSTEM_LMTE
@@ -116,6 +186,35 @@ uint32_t stack_time(void)
  */
 void stack_timers(void)
 {
+}
+
+/*------------------------------------------------
+ * stack_set_protocol_handler()
+ *
+ *  register a call-back function handler for protocol inputs
+ *
+ *  param:  protocol for which this handler is being registered, pointer to handler call-back function
+ *  return: none
+ *
+ */
+void stack_set_protocol_handler(ip4_protocol_t protocol, void (*input_handler)(struct pbuf_t* const))
+{
+    switch ( protocol )
+    {
+        case IP4_ICMP:
+            stack.icmp_input_handler = input_handler;
+            break;
+
+        case IP4_UDP:
+            stack.udp_input_handler = input_handler;
+            break;
+
+        case IP4_TCP:
+            stack.tcp_input_handler = input_handler;
+            break;
+
+        default:;
+    }
 }
 
 /*------------------------------------------------
@@ -163,6 +262,8 @@ struct pbuf_t* const pbuf_allocate(pbuf_type_t type)
 
     default:;
     }
+
+    assert(p);                                      // @@ keep this here for a little while...
 
     return p;
 }
@@ -255,6 +356,70 @@ uint16_t stack_checksum(const void *dataptr, int len)
 }
 
 /*------------------------------------------------
+ * stack_ip4addr_ntoa()
+ *
+ *  this function converts an IP address from a 32bit representation
+ *  to a string 'dot' notation representation
+ *  source: https://github.com/espressif/esp-idf/blob/master/components/lwip/core/ipv4/ip4_addr.c
+ *
+ *  param:  IP address in 32bit representation, pointer to output string, string length
+ *          length of the string should have space for 'xxx.xxx.xxx.xxx\0'
+ *          a '\0' will always be inserted at the last string position as a terminator.
+ *  return: pointer to output string
+ *
+ */
+char* stack_ip4addr_ntoa(ip4_addr_t s_addr, char* const buf, uint8_t buflen)
+{
+    char        inv[3];
+    char       *rp;
+    uint8_t    *ap;
+    uint8_t     rem;
+    uint8_t     n;
+    uint8_t     i;
+    int         len = 0;
+
+    if ( n > 0 )
+    {
+        rp = buf;
+        ap = (uint8_t *) &s_addr;
+        for (n = 0; n < 4; n++)
+        {
+            i = 0;
+            do
+            {
+                rem = *ap % (uint8_t)10;
+                *ap /= (uint8_t)10;
+                inv[i++] = '0' + rem;
+            } while (*ap);
+
+            while (i--)
+            {
+                if (len++ >= buflen)
+                {
+                    buf[0] = 0;
+                    return NULL;
+                }
+                *rp++ = inv[i];
+            }
+
+            if (len++ >= buflen)
+            {
+                buf[0] = 0;
+                return NULL;
+            }
+            *rp++ = '.';
+            ap++;
+        }
+
+        *--rp = 0;
+    }
+    else
+        buf[0] = 0;
+
+    return buf;
+}
+
+/*------------------------------------------------
  * inputStub()
  *
  *  this function is a stub function for ethernet input.
@@ -287,9 +452,8 @@ void inputStub(struct pbuf_t* const p, struct net_interface_t* const netif)     
  * outputStub()
  *
  *  this function is a stub function for ethernet output.
- *  received packets will be forwarded to this function, which
- *  will replace MAC addresses with self addressed MAC and the
- *  be transmitted with a call to low_level_output()
+ *  received packets will be forwarded to this function and be
+ *  dropped (or can be displayed for debug...)
  *
  *  param:  pbuf pointer to received data and the network interface structure
  *  return: ERR_OK on success or other status on failure.
@@ -297,33 +461,20 @@ void inputStub(struct pbuf_t* const p, struct net_interface_t* const netif)     
  */
 ip4_err_t outputStub(struct net_interface_t* const netif, struct pbuf_t* const p)
 {
-    ip4_err_t                result;
-    struct ethernet_frame_t *frame;
-    uint8_t                 *payload;
+    int     i;
 
-    frame = (struct ethernet_frame_t*) p->pbuf; // some careful recasting...
-    frame->dest[0] = 0x00;                      // so that the junk frame get's routed back to me
-    frame->dest[1] = 0x0c;
-    frame->dest[2] = 0x41;
-    frame->dest[3] = 0x57;
-    frame->dest[4] = 0x70;
-    frame->dest[5] = 0x00;
-    frame->src[0]  = 0x00;
-    frame->src[1]  = 0x0c;
-    frame->src[2]  = 0x41;
-    frame->src[3]  = 0x57;
-    frame->src[4]  = 0x70;
-    frame->src[5]  = 0x00;
-    frame->type = 0x0008;
+    printf("");
 
-    p->len = 64;
+    printf("outputStub()\n dst: ");
+    for (i = 0; i < 6; i++)
+        printf("%02x ", (p->pbuf)[i]);
+    printf("\n src: ");
+    for (i = 6; i < 12; i++)
+        printf("%02x ", (p->pbuf)[i]);
+    printf("\n typ: ");
+    for (i = 12; i < 14; i++)
+        printf("%02x ", (p->pbuf)[i]);
+    printf("\n");
 
-    /* this is the point where padding would be added to the frame
-     * and/or CRC would be calculated and appended
-     * my implementation relies on ENC28J60 to do the padding and CRC
-     *
-     */
-    result = netif->linkoutput(netif->state, p);
-
-    return result;
+    return ERR_OK;
 }
