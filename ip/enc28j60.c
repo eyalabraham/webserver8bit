@@ -669,7 +669,7 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
     assert(len <= PACKET_BUF_SIZE);
 
     // allocate a pbuf from the pool
-    p = pbuf_allocate(RX);
+    p = pbuf_allocate();
 
     if (p != NULL)
     {

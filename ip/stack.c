@@ -28,8 +28,7 @@
 ----------------------------------------- */
 struct ip4stack_t   stack;                                          // IP stack data structure
 
-static struct pbuf_t       txPbuf[TX_PACKET_BUFS];                  // transmit and
-static struct pbuf_t       rxPbuf[RX_PACKET_BUFS];                  // receive buffer pointers
+static struct pbuf_t       pBuf[PACKET_BUFS];                    // transmit and receive buffer pointers
 
 
 /*------------------------------------------------
@@ -51,12 +50,9 @@ void stack_init(void)
 
     // initialize buffer allocation
     // test for valid range and initialize data structures
-    assert((TX_PACKET_BUFS > 0) && (TX_PACKET_BUFS <= MAX_PBUFS));
-    assert((RX_PACKET_BUFS > 0) && (RX_PACKET_BUFS <= MAX_PBUFS));
-    for (i = 0; i < TX_PACKET_BUFS; i++)
-        txPbuf[i].len = PBUF_FREE;
-    for (i = 0; i < RX_PACKET_BUFS; i++)
-        rxPbuf[i].len = PBUF_FREE;
+    assert((PACKET_BUFS > 0) && (PACKET_BUFS <= MAX_PBUFS));
+    for (i = 0; i < PACKET_BUFS; i++)
+        pBuf[i].len = PBUF_FREE;
 }
 
 /*------------------------------------------------
@@ -223,44 +219,25 @@ void stack_set_protocol_handler(ip4_protocol_t protocol, void (*input_handler)(s
  *  find a free packet buffer from the static pool
  *  of buffers and return a pointer to it.
  *  the allocation is a simple scan over a list of pointers
- *  to find a slot that is not assigned (in NULL)
+ *  to find a slot that is not assigned (is NULL)
  *
- *  param:  buffer type to be 'RX' or 'TX' pool
+ *  param:  none
  *  return: pointer to packet buffer or NULL if failed
  *
  */
-struct pbuf_t* const pbuf_allocate(pbuf_type_t type)
+struct pbuf_t* const pbuf_allocate(void)
 {
-    struct pbuf_t *p = NULL;                        // return NULL is not free buffers
+    struct pbuf_t *p = NULL;                        // return NULL if not free buffers
     int            i;
 
-    switch ( type )
+    for (i = 0; i < PACKET_BUFS; i++)               // scan the list of pointers for a free slot
     {
-    case TX:
-        for (i = 0; i < TX_PACKET_BUFS; i++)        // scan the list of pointers for a free slot
+        if ( pBuf[i].len == PBUF_FREE )             // if slot is free
         {
-            if ( txPbuf[i].len == PBUF_FREE )       // if slot is free
-            {
-                txPbuf[i].len = PBUF_MARKED;        // mark as in use
-                p = &(txPbuf[i]);                   // get pbuf pointer for return
-                break;                              // exit loop
-            }
+            pBuf[i].len = PBUF_MARKED;              // mark as in use
+            p = &(pBuf[i]);                         // get pbuf pointer for return
+            break;                                  // exit loop
         }
-        break;
-
-    case RX:
-        for (i = 0; i < RX_PACKET_BUFS; i++)
-        {
-            if ( rxPbuf[i].len == PBUF_FREE )
-            {
-                rxPbuf[i].len = PBUF_MARKED;
-                p = &(rxPbuf[i]);
-                break;
-            }
-        }
-        break;
-
-    default:;
     }
 
     assert(p);                                      // @@ keep this here for a little while...

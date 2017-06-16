@@ -315,7 +315,7 @@ static ip4_err_t arp_send(struct net_interface_t* const netif, hwaddr_t *dest, h
 
     PRNT_FUNC;
 
-    p = pbuf_allocate(TX);                                      // allocation a transmit buffer
+    p = pbuf_allocate();                                        // allocation a transmit buffer
     if ( p )
     {
         frame = (struct ethernet_frame_t*) p->pbuf;             // establish pointer to etherner frame

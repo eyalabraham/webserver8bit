@@ -178,12 +178,6 @@ struct arp_tbl_t                                // data structure of ARP table e
 #define     PBUF_FREE               0           // packet buffer is free to use
 #define     PBUF_MARKED            -1           // packet buffer is in use, but not populated with data
 
-typedef enum
-{
-    RX,                                         // buffer type TX or RX
-    TX
-} pbuf_type_t;
-
 struct pbuf_t
 {
     int         len;                            // bytes count in buffer, == 0 is puffer is free

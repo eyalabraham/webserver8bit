@@ -55,7 +55,7 @@ ip4_err_t icmp_ping_output(ip4_addr_t dest, uint16_t ident, uint16_t seq, uint8_
     struct pbuf_t  *p;
     struct icmp_t  *icmp_out;
 
-    p = pbuf_allocate(TX);
+    p = pbuf_allocate();
     if ( p != NULL )
     {
         icmp_out = (struct icmp_t*) &(p->pbuf[FRAME_HDR_LEN + IP_HDR_LEN]);         // pointer to ICMP header

@@ -30,7 +30,7 @@ void                            stack_timers(void);                             
 void                            stack_set_protocol_handler(ip4_protocol_t,              // setup input handler per protocol
                                                            void (*)(struct pbuf_t* const));
 
-struct pbuf_t* const            pbuf_allocate(pbuf_type_t);                             // allocate a transmit or receive buffer
+struct pbuf_t* const            pbuf_allocate(void);                                    // allocate a transmit or receive buffer
 void                            pbuf_free(struct pbuf_t* const);                        // free a buffer allocation
 
 void                            stack_sig(stack_sig_t);                                 // signal stack events

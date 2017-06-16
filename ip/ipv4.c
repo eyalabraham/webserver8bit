@@ -214,7 +214,7 @@ static void ip4_icmp_handler(struct pbuf_t* const p, struct net_interface_t* con
     switch ( stack_byteswap(icmp_in->type_code) )
     {
         case ECHO_REQ:                                                          // handle ICMP ping request by responding to it
-            q = pbuf_allocate(TX);                                              // allocate a pbuf and establish pointers
+            q = pbuf_allocate();                                                // allocate a pbuf and establish pointers
             if ( q == NULL )
                 break;
             ip_out = (struct ip_header_t*) &(q->pbuf[FRAME_HDR_LEN]);

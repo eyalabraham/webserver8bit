@@ -49,8 +49,9 @@
  * Data Link layer setup options, buffers, ARP etc
  *
  */
-#define     RX_PACKET_BUFS      1           // # of input packet buffers, relying on enc28j60 8K buffering
-#define     TX_PACKET_BUFS      2           // # of output packet buffers
+#define     RX_BUFS             1           // # of input packet buffers, relying on enc28j60 8K buffering
+#define     TX_BUFS             2           // # of output packet buffers
+#define     PACKET_BUFS         (RX_BUFS+TX_BUFS)
 #define     MAX_PBUFS           8           // max # of RX or TX buffers
 #define     PACKET_BUF_SIZE     1536        // size of packet buffer in bytes
 
