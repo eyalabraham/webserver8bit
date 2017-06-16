@@ -150,8 +150,8 @@ void main(int argc, char* argv[])
         {
             pingPayload.time = stack_time();
             seq++;
-            result = icmp_ping_output(IP4_ADDR(192,168,1,10), ident, seq, (uint8_t* const) &pingPayload, sizeof(struct ping_payload_t));    // output an ICMP Ping packet
-            //result = icmp_ping_output(IP4_ADDR(139,130,4,5), ident, seq, (uint8_t* const) &pingPayload, sizeof(struct ping_payload_t));
+            //result = icmp_ping_output(IP4_ADDR(192,168,1,12), ident, seq, (uint8_t* const) &pingPayload, sizeof(struct ping_payload_t));    // output an ICMP Ping packet
+            result = icmp_ping_output(IP4_ADDR(139,130,4,5), ident, seq, (uint8_t* const) &pingPayload, sizeof(struct ping_payload_t));
 
             switch ( result )
             {

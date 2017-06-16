@@ -24,7 +24,9 @@ typedef enum                    // stack wide error codes
     ERR_RT_FULL  = -6,          // route table full, entry not added
     ERR_RT_RANGE = -7,          // route table index out of range
     ERR_BAD_PROT = -8,          // trying to send an unsupported protocol (ipv4.c)
-    ERR_NO_ROUTE = -9           // no route to send IP packet, check routing table
+    ERR_NO_ROUTE = -9,          // no route to send IP packet, check routing table
+    ERR_TX_COLL  = -10,         // too many transmit collisions, Tx aborter
+    ERR_TX_LCOLL = -11          // late-collision during transmit, possible full/half-duplex mismatch
 } ip4_err_t;
 
 #endif /* __IP4ERROR_H__ */

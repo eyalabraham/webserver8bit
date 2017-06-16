@@ -101,22 +101,22 @@ struct enc28j60_t
 #define     ECON1_TXRTS         0x08
 #define     ECON1_RXRST         0x40
 #define     ECON1_TXRST         0x80
-#define     EIR_PKTIF           0x40
-#define     EIR_RXERIF          0x01
+#define     EIR_TXIF            0x08
+#define     EIR_TXERIF          0x02
 #define     ECON2_AUTOINC       0x80
 #define     ECON2_PKTDEC        0x40
 
 /* -----------------------------------------
     ENC28J60 initialization parameters
 ----------------------------------------- */
-#define     INIT_ERXST          0x0000          // receive buffer start 0x0000
+#define     INIT_ERXST          0x0000          // receive buffer start 0x0000 (errata #5, DS80349C)
 #define     INIT_ERXND          0x13ff          // receive buffer end 0x13ff (5K byte)
 #define     INIT_ERXRDPT        INIT_ERXST      // receiver read pointer 0x0000
 #define     INIT_ERXWRPT        INIT_ERXST      // receiver write pointer 0x0000
 #define     INIT_ERDPT          INIT_ERXST      // receiver read pointer
 
 #define     INIT_ETXST          0x1500          // transmit buffer start 0x1500
-#define     INIT_EWRPT          INIT_ETXST+1    // transmitter write pointer, one byte after PER_PACK_CTRL location
+#define     INIT_EWRPT         (INIT_ETXST+1)   // transmitter write pointer, one byte after PER_PACK_CTRL location
 
 #define     INIT_ERXFCON        0xa1            // see section 8.0 RECEIVE FILTERS, pg.49
 
@@ -126,11 +126,16 @@ struct enc28j60_t
 #define     INIT_MABBIPG        0x15            // transmission packet gap definitions
 #else
 #define     INIT_MABBIPG        0x12            // transmission packet gap definitions
+#define     INIT_MACLCON1       15              // retransmission in half duplex
+#define     INIT_MACLCON2       55              // collision window
 #endif
 #define     INIT_MAIPGL         0x12
 #define     INIT_MAIPGH         0x0C
 
-#define     PER_PACK_CTRL       0x0e            // MACON3 will be used to determine how the packet will be transmitted
+#define     INIT_PHLCON         0x3412          // LED-B display TX activity
+
+#define     LATE_COLL_STAT      0x20            // late collision status bit in Tx status vector status byte 2
+#define     PER_PACK_CTRL       0x00            // MACON3 will be used to determine how the packet will be transmitted
 
 /* -----------------------------------------
    ENC28J60 register bank identifiers

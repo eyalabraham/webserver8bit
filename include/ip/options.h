@@ -32,14 +32,14 @@
 #define     ETHIF_NAME_LENGTH   5
 #define     ETHIF_NAME          "eth0\0"    // interface's identifier
 
-#define     MAC0                0x00        // my old USB wifi 'B' adapter
+#define     MAC0                0x00        // my old USB wifi 'B' adapter (or can use: 00:e0:63:82:4b:e9)
 #define     MAC1                0x0c
 #define     MAC2                0x41
 #define     MAC3                0x57
 #define     MAC4                0x70
 #define     MAC5                0x00
 
-#define     FULL_DUPLEX         1           // set to 0 for half-duplex setup
+#define     FULL_DUPLEX         0           // set to 0 for half-duplex setup
 #define     INTERFACE_COUNT     1           // # of ethernet interfaces in the system
 #define     DRV_DMA_IO          1           // set to 1 for DMA based IO
 

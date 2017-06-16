@@ -88,7 +88,7 @@ static spiDevErr_t setRegisterBank(regBank_t bank)
 
 ABORT_BANKSEL:
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("setRegisterBank(%d) %d\n", bank, result);
+    printf("exit: %s(%d) %d\n", __func__, bank, result);
 #endif
     return result;                                          // bad bank number parameter passed in
 }
@@ -135,7 +135,7 @@ static spiDevErr_t readControlRegister(ctrlReg_t reg, uint8_t* byte)
 
 ABORT_RCR:
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("readControlRegister(0x%02x,0x%02x) %d\n", reg, *byte, result);
+    printf("exit: %s(0x%02x,0x%02x) %d\n", __func__, reg, *byte, result);
 #endif
     return result;
 }
@@ -168,7 +168,7 @@ static spiDevErr_t writeControlRegister(ctrlReg_t reg, uint8_t byte)
 
 ABORT_WCR:
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("writeControlRegister(0x%02x,0x%02x) %d\n", reg, byte, result);
+    printf("exit: %s(0x%02x,0x%02x) %d\n", __func__, reg, byte, result);
 #endif
     return result;
 }
@@ -217,7 +217,7 @@ static spiDevErr_t readPhyRegister(phyReg_t reg, uint16_t* word)
 
 ABORT_PHYRD:
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("readPhyRegister(0x%02x,0x%04x) %d\n", reg, *word, result);
+    printf("exit: %s(0x%02x,0x%04x) %d\n", __func__, reg, *word, result);
 #endif
     return result;
 }
@@ -255,7 +255,7 @@ static spiDevErr_t writePhyRegister(phyReg_t reg, uint16_t word)
 
 ABORT_PHYWR:
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("writePhyRegister(0x%02x,0x%04x) %d\n", reg, word, result);
+    printf("exit: %s(0x%02x,0x%04x) %d\n", __func__, reg, word, result);
 #endif
     return result;
 }
@@ -277,7 +277,7 @@ static spiDevErr_t controlBit(ctrlReg_t reg, uint8_t position)
         result = ((value & position) ? 1 : 0);
 
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("controlBit(0x%02x,0x%02x) %d\n", reg, position, result);
+    printf("exit: %s(0x%02x,0x%02x) %d\n", __func__, reg, position, result);
 #endif
     return result;
 }
@@ -316,7 +316,7 @@ static spiDevErr_t setControlBit(ctrlReg_t reg, uint8_t position)
 
 ABORT_BFS:
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("setControlBit(0x%02x,0x%02x) %d\n", reg, position, result);
+    printf("exit: %s(0x%02x,0x%02x) %d\n", __func__, reg, position, result);
 #endif
     return result;
 }
@@ -355,7 +355,7 @@ static spiDevErr_t clearControlBit(ctrlReg_t reg, uint8_t position)
 
 ABORT_BFC:
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("clearControlBit(0x%02x,0x%02x) %d\n", reg, position, result);
+    printf("exit: %s(0x%02x,0x%02x) %d\n", __func__, reg, position, result);
 #endif
     return result;
 }
@@ -372,10 +372,7 @@ static void spiCallBack(void)
     dmaComplete = 1;
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf("%s()\n dmaComplete=%d\n", __func__, dmaComplete);
-#endif
-#ifdef DRV_DEBUG_FUNC_EXIT
-    printf("spiCallBack()\n");
+    printf("exit: %s() dmaComplete=%d\n", __func__, dmaComplete);
 #endif
 }
 #endif /* DRV_DMA_IO */
@@ -397,7 +394,7 @@ static spiDevErr_t readMemBuffer(uint8_t *dest, uint16_t address, uint16_t lengt
     int         i;
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf("%s()\n len=%u address=0x%04x\n", __func__, length, address);
+    printf("enter: %s()\n  len=%u address=0x%04x\n", __func__, length, address);
 #endif
 
     if ( length == 0 )
@@ -449,7 +446,7 @@ static spiDevErr_t writeMemBuffer(uint8_t *src, uint16_t address, uint16_t lengt
     int         i;
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf("%s()\n len=%u address=0x%04x\n", __func__, length, address);
+    printf("enter: %s()\n  len=%u address=0x%04x\n", __func__, length, address);
 #endif
 
     if ( length == 0 )
@@ -497,11 +494,11 @@ static void ethReset(void)
     int     i;
 
 #ifdef DRV_DEBUG_FUNC_NAME
-    printf("%s()\n",__func__);
+    printf("enter: %s()\n",__func__);
 #endif
 
     spiWriteByte(ETHERNET_WR, OP_SC);           // issue a reset command
-    for (i = 0; i < 550; i++);                  // wait ~2mSec because ESTAT.CLKRDY is not reliable (errata #2, DS80349C)
+    for (i = 0; i < 1100; i++);                 // wait ~4mSec because ESTAT.CLKRDY is not reliable (errata #2, DS80349C)
 }
 
 /* -----------------------------------------
@@ -515,7 +512,7 @@ static int packetWaiting(void)
 {
     uint8_t    packetCount;
 
-    readControlRegister(EPKTCNT, &packetCount); // check packet count waiting in input buffer
+    readControlRegister(EPKTCNT, &packetCount); // check packet count waiting in input buffer (errata #6, DS80349C)
     return ( packetCount > 0 ? 1 : 0);
 }
 
@@ -555,8 +552,8 @@ static void extractPacketInfo(struct enc28j60_t *ethif)
  * This function does the actual transmission of the packet.
  * The packet is contained in the pbuf that is passed to the function.
  *
- * param:  netif the network interface structure for this ethernet interface
- *         p the packet to send (e.g. IP packet including MAC addresses and type)
+ * param:  'ethif' the device interface structure for this ethernet interface
+ *         p the packet pbuf to send (e.g. IP packet including MAC addresses and type)
  * return: ERR_OK if the packet could be sent
  *         an ip4_err_t value if the packet couldn't be sent
  *
@@ -568,42 +565,43 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
     ip4_err_t   result = ERR_OK;
 
 #ifdef DRV_DEBUG_FUNC_NAME
-    printf("%s()\n",__func__);
+    printf("enter: %s()\n",__func__);
 #endif
 
     writeControlRegister(ETXSTL, LOW_BYTE(INIT_ETXST));         // explicitly set the transmit buffer start
     writeControlRegister(ETXSTH, HIGH_BYTE(INIT_ETXST));
 
-    writeControlRegister(EWRPTL, LOW_BYTE(INIT_EWRPT));         // setup buffer write pointer
-    writeControlRegister(EWRPTH, HIGH_BYTE(INIT_EWRPT));
-
     // transfer packet data into ENC28J60 output buffer
-    // send the data from the pbuf to the interface, one pbuf at a time.
     // the size of the data in each pbuf is kept in the ->len variable.
-    assert(writeMemBuffer(p->pbuf, USE_CURR_ADD, p->len) == SPI_OK); // @@ convert to proper error handling, with: do { ... } while (0);
+    assert(writeMemBuffer(p->pbuf, (uint16_t) INIT_EWRPT, p->len) == SPI_OK); // @@ convert to proper error handling, with: do { ... } while (0);
 
-    readControlRegister(EWRPTH, &tempU8);                       // get value of write pointer
-    tempU16 = (uint16_t) tempU8 << 8;
-    readControlRegister(EWRPTL, &tempU8);
-    tempU16 += tempU8;
-    tempU16--;                                                  // convert into end of buffer address
+    tempU16 = (uint16_t) INIT_ETXST;                            // calculate buffer end address
+    tempU16 += p->len;
 
     writeControlRegister(ETXNDL, LOW_BYTE(tempU16));            // set buffer end address
     writeControlRegister(ETXNDH, HIGH_BYTE(tempU16));
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf("link_output()\n len=%u txBufferEnd=0x%04x\n", p->len, tempU16);
+    printf("  len=%u txBufferEnd=0x%04x\n", p->len, tempU16);
 #endif
 
+    setControlBit(ECON1, ECON1_TXRST);                          // implementing per errata #12 (document DS80349C)
+    clearControlBit(ECON1, ECON1_TXRST);
+    clearControlBit(EIR, EIR_TXERIF);
+
+    clearControlBit(EIR, EIR_TXIF);                             // clear transmit interrupt flag
     setControlBit(ECON1, ECON1_TXRTS);                          // enable/start frame transmission
 
-    if ( controlBit(ECON1, ECON1_TXRTS) ) {}                    // wait for transmission to complete
+    while ( !controlBit(EIR, EIR_TXIF) &&                       // per errata #13 (document DS80349C)
+            !controlBit(EIR, EIR_TXERIF) ) {}                   // wait for transmission to complete or to error out
+
+    clearControlBit(ECON1, ECON1_TXRTS);
 
     tempU16++;                                                  // read the packet transmit status vector
     readMemBuffer(ethif->txStatusVector, tempU16, sizeof(struct txStat_t));
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf(" bytes Tx %u\n Stat1    0x%02x\n Stat2    0x%02x\n Stat3    0x%02x\n total Tx %u\n",
+    printf("  bytes Tx %u\n  Stat1    0x%02x\n  Stat2    0x%02x\n  Stat3    0x%02x\n  total Tx %u\n",
             ethif->txStatVector.txByteCount,
             ethif->txStatVector.txStatus1,
             ethif->txStatVector.txStatus2,
@@ -611,11 +609,15 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
             ethif->txStatVector.txTotalXmtCount);
 #endif
 
-    if ( controlBit(ESTAT, ESTAT_TXABRT) == 1 )                 // check for errors
+    if ( controlBit(EIR, EIR_TXERIF) )                          // check for errors
     {
-        result = ERR_DRV;
+        if ( ethif->txStatVector.txStatus2 & LATE_COLL_STAT )   // determine type of transmit link collisions
+            result = ERR_TX_LCOLL;                              // @@ should address errata #15 here
+        else
+            result = ERR_TX_COLL;
+
 #ifdef DRV_DEBUG_FUNC_PARAM
-        printf(" *** packet transmission failure ***\n");
+        printf("  *** packet transmission failure ***\n");
 #endif
     }
 
@@ -628,7 +630,7 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
  * allocate a pbuf and transfer the bytes of the incoming
  * packet from the interface into the pbuf.
  *
- * param:  'netif' the network interface structure
+ * param:  'ethif' pointer to the device interface to be read
  * return: a pbuf filled with the received packet (including MAC header)
  *         NULL on memory error
  * ----------------------------------------- */
@@ -638,7 +640,7 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
     uint16_t        len;
 
 #ifdef DRV_DEBUG_FUNC_NAME
-    printf("%s()\n",__func__);
+    printf("enter: %s()\n",__func__);
 #endif
 
     if ( !packetWaiting() )
@@ -654,7 +656,7 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
     extractPacketInfo(ethif);
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf("link_input()\n len   %u\n next  0x%02x%02x\n stat1 0x%02x\n stat2 0x%02x\n",
+    printf("  len   %u\n next  0x%02x%02x\n stat1 0x%02x\n stat2 0x%02x\n",
                ethif->rxStatVector.rxByteCount,
                ethif->rxStatVector.nextPacketH,
                ethif->rxStatVector.nextPacketL,
@@ -679,13 +681,13 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
 #ifdef DRV_DEBUG_FUNC_PARAM
         {
             int i;
-            printf(" dst: ");
+            printf("  dst: ");
             for (i = 0; i < 6; i++)
                 printf("%02x ", (p->pbuf)[i]);
-            printf("\n src: ");
+            printf("\n  src: ");
             for (i = 6; i < 12; i++)
                 printf("%02x ", (p->pbuf)[i]);
-            printf("\n typ: ");
+            printf("\n  typ: ");
             for (i = 12; i < 14; i++)
                 printf("%02x ", (p->pbuf)[i]);
             printf("\n");
@@ -696,11 +698,11 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
 #ifdef DRV_DEBUG_FUNC_PARAM
     else
     {
-        printf(" *** 'pbuf' alloc err, packet dropped ***\n");
+        printf("  *** 'pbuf' alloc err, packet dropped ***\n");
     }
 #endif
 
-    // acknowledge that a packet has been read from ENC28J60
+    // acknowledge that a packet has been read from ENC28J60             @@ need to implement errata #14
     writeControlRegister(ERXRDPTL, ethif->rxStatVector.nextPacketL);  // update ERXRDPT to free read-packet buffer space
     writeControlRegister(ERXRDPTH, ethif->rxStatVector.nextPacketH);
     setControlBit(ECON2, ECON2_PKTDEC);                               // decrement packet waiting count
@@ -728,7 +730,7 @@ int link_state(void)
     linkState = ((phyStatus & PHSTAT1_LLSTAT) ? 1 : 0);
 */
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("ethLinkUp(%d)\n",linkState);
+    printf("exit: %s(%d)\n", __func__, linkState);
 #endif
 
     return linkState;
@@ -751,10 +753,13 @@ struct enc28j60_t* enc28j60Init(void)
     uint8_t            perPacketCtrl = PER_PACK_CTRL;
 
 #ifdef DRV_DEBUG_FUNC_NAME
-    printf("%s()\n",__func__);
+    printf("enter: %s()\n",__func__);
 #endif
 
     ethReset();                                             // issue a reset command
+
+    clearControlBit(ECON1, ECON1_TXRTS);                    // disable frame transmission
+    clearControlBit(ECON1, ECON1_RXEN);                     // disable reception
 
     memset(&deviceState, 0, sizeof(struct enc28j60_t));     // zero out data structure before populating it
 
@@ -763,7 +768,7 @@ struct enc28j60_t* enc28j60Init(void)
     readControlRegister(EREVID, &(deviceState.revID));
 
 #ifdef DRV_DEBUG_FUNC_PARAM
-    printf("enc28j60Init()\n PHID1=0x%04x PHID2=0x%04x Rev=0x%02x\n", deviceState.phyID1, deviceState.phyID2, deviceState.revID);
+    printf("  PHID1=0x%04x PHID2=0x%04x Rev=0x%02x\n", deviceState.phyID1, deviceState.phyID2, deviceState.revID);
 #endif
 
     assert(deviceState.phyID1 == PHY_ID1);                  // assert on ID values!
@@ -792,7 +797,9 @@ struct enc28j60_t* enc28j60Init(void)
     setControlBit(MACON3, MACON3_FULDPX);                                       // set for full duplex
 #else
     clearControlBit(MACON1, (MACON1_TXPAUS | MACON1_RXPAUS));                   // for half duplex, clear TXPAUS and RXPAUS
-    clearControlBit(MACON3, MACON3_FULDPX);                                     // set for half duplex
+    clearControlBit(MACON3, MACON3_FULDPX);                                     // clear for half duplex
+    writeControlRegister(MACLCON1, INIT_MACLCON1);                              // retransmission maximum
+    writeControlRegister(MACLCON2, INIT_MACLCON2);                              // collision window
 #endif
     setControlBit(MACON3, (MACON3_PADCFG | MACON3_TXCRCEN | MACON3_FRMLEN));    // full frame padding + CRC
 
@@ -809,6 +816,8 @@ struct enc28j60_t* enc28j60Init(void)
     writeControlRegister(MAADR4, MAC3);
     writeControlRegister(MAADR5, MAC4);
     writeControlRegister(MAADR6, MAC5);
+
+    writePhyRegister(PHLCON, INIT_PHLCON);                  // LED control
 
 #if FULL_DUPLEX
     readPhyRegister(PHCON1, &tmpPhyReg);                    // set PHY to match half duplex setup MACON3_FULDPX
@@ -843,8 +852,8 @@ struct enc28j60_t* enc28j60Init(void)
     }
 
 #ifdef DRV_DEBUG_FUNC_EXIT
-    printf("PHY ID 0x%04x:0x%04x\n", deviceState->phyID1, deviceState->phyID2);
-    printf("enc28j60Init() %d\n", result);
+    printf("  PHY ID 0x%04x:0x%04x\n", deviceState.phyID1, deviceState.phyID2);
+    printf("exit: %s() %d\n", __func__, result);
 #endif
 
     return result;
