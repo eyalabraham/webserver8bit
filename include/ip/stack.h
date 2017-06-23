@@ -20,6 +20,9 @@
 /* -----------------------------------------
    IPv4 interface and utility functions
 ----------------------------------------- */
+#define     stack_hton(x)       stack_ntoh(((uint16_t)x))
+#define     stack_htonl(x)      stack_ntohl(((uint32_t)x))
+
 void                            stack_init(void);                                       // initialize the IP stack
 struct net_interface_t* const   stack_get_ethif(uint8_t);                               // get pointer to an interface on the stack
 ip4_err_t                       stack_set_route(ip4_addr_t, ip4_addr_t, uint8_t);       // add a route to the route table
@@ -34,7 +37,8 @@ struct pbuf_t* const            pbuf_allocate(void);                            
 void                            pbuf_free(struct pbuf_t* const);                        // free a buffer allocation
 
 void                            stack_sig(stack_sig_t);                                 // signal stack events
-uint16_t                        stack_byteswap(uint16_t);                               // big-endian to little-endian 16bit bytes swap
+uint16_t                        stack_ntoh(uint16_t);                                   // big-endian to little-endian 16bit bytes swap
+uint32_t                        stack_ntohl(uint32_t);                                  // big-endian to little-endian 32bit bytes swap
 uint16_t                        stack_checksum(const void*, int);                       // checksum calculation
 char*                           stack_ip4addr_ntoa(ip4_addr_t, char* const, uint8_t);   // convert network address to string representation
 

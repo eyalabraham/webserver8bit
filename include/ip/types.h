@@ -17,7 +17,7 @@
 #include    "ip/options.h"
 
 /* -----------------------------------------
-   Ethernet and IPv4
+   Ethernet
 ----------------------------------------- */
 #define     HW_ADDR_LENGTH          6           // for IPv4 this is always 6
 
@@ -28,6 +28,8 @@ typedef uint32_t    ip4_addr_t;                 // IP address packed into unsign
                                ((uint32_t)((c) & 0xff) << 16) | \
                                ((uint32_t)((b) & 0xff) << 8)  | \
                                 (uint32_t)((a) & 0xff))
+
+#define  IP4_ADDR_ANY               0           // equivalent to 0.0.0.0
 
 #define copy_hwaddr(d,s)      memcpy((d),(s),HW_ADDR_LENGTH)
 
@@ -89,6 +91,9 @@ typedef enum                                    // https://en.wikipedia.org/wiki
     TYPE_VLAN2TAG = 0x9100                      // VLAN-tagged (IEEE 802.1Q) frame with double tagging
 } ether_type_t;
 
+/* -----------------------------------------
+   IPv4
+----------------------------------------- */
 #define     IP_VER          0x40                // IPv4 version
 #define     IP_IHL          0x05                // default header length
 #define     IP_QOS          0                   // best effort, no congestion control possible
@@ -117,22 +122,6 @@ typedef enum
     IP4_TCP  =  6,
     IP4_UDP  = 17
 } ip4_protocol_t;
-
-struct icmp_t                                   // https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol
-{
-    uint16_t    type_code;                      // ICMP type and subtype (icmp_msg_t)
-    uint16_t    checksum;                       // ICMP header and data checksum
-    uint16_t    id;                             // identifier
-    uint16_t    seq;                            // sequence number
-    uint8_t     payloadStart;                   // the *address* of this byte is the pointer to the start of the ICMP optional payload
-};
-
-typedef enum
-{
-    ECHO_REPLY = 0x0000,                        // Echo reply to a ping
-    ECHO_REQ = 0x0800,                          // Echo request (used by ping)
-    ROUTER_SOLIC = 0x0a00                       // sent to any routers to get their info
-} icmp_msg_t;
 
 /* -----------------------------------------
    ARP
@@ -173,15 +162,66 @@ struct arp_tbl_t                                // data structure of ARP table e
 };
 
 /* -----------------------------------------
+   ICMP
+----------------------------------------- */
+struct icmp_t                                   // https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol
+{
+    uint16_t    type_code;                      // ICMP type and subtype (icmp_msg_t)
+    uint16_t    checksum;                       // ICMP header and data checksum
+    uint16_t    id;                             // identifier
+    uint16_t    seq;                            // sequence number
+    uint8_t     payloadStart;                   // the *address* of this byte is the pointer to the start of the ICMP optional payload
+};
+
+typedef enum
+{
+    ECHO_REPLY = 0x0000,                        // Echo reply to a ping
+    ECHO_REQ = 0x0800,                          // Echo request (used by ping)
+    ROUTER_SOLIC = 0x0a00                       // sent to any routers to get their info
+} icmp_msg_t;
+
+/* -----------------------------------------
+   UDP
+----------------------------------------- */
+struct udp_t
+{
+    uint16_t    srcPort;                                        // source application port
+    uint16_t    destPort;                                       // destination application port
+    uint16_t    length;                                         // length in bytes of the UDP header and UDP data, min. 8
+    uint16_t    checksum;                                       // checksum. can be '0' if checksum is not used
+    uint8_t     payloadStart;
+};
+
+typedef enum                                                    // protocol control block state
+{
+    FREE        = 0,                                            // PCB is free to use
+    BOUND       = 1                                             // protocol is bound
+} pcb_state_t;
+
+typedef void (*udp_recv_callback)(struct pbuf_t* const,         // UDP data receive callback function
+                                  const ip4_addr_t,             // passes pointer to pbuf, source IP
+                                  const uint16_t);              // and source port
+
+struct udp_pcb_t
+{
+    ip4_addr_t  localIP;                                        // local IP address to bind this PCB
+    uint16_t    localPort;                                      // local port to bind this PCB
+    ip4_addr_t  remoteIP;                                       // remote IP source
+    uint16_t    remotePort;                                     // remote port of source IP
+    udp_recv_callback   udp_callback;                           // UDP data receiver callback handler
+    pcb_state_t state;                                          // PCB state
+};
+
+/* -----------------------------------------
    Packet buffer
 ----------------------------------------- */
-#define     PBUF_FREE               0           // packet buffer is free to use
-#define     PBUF_MARKED            -1           // packet buffer is in use, but not populated with data
+#define     PBUF_FREE               0                           // packet buffer is free to use
+#define     PBUF_MARKED            -1                           // packet buffer is in use, but not populated with data
 
 struct pbuf_t
 {
-    int         len;                            // bytes count in buffer, == 0 is puffer is free
-    uint8_t     pbuf[PACKET_BUF_SIZE];          // packet buffer type
+    int         len;                                            // bytes count in buffer, == 0 is puffer is free
+    uint8_t     pbuf[PACKET_BUF_SIZE];                          // packet buffer type
 };
 
 /* -----------------------------------------
@@ -230,6 +270,7 @@ struct net_interface_t                                          // general netwo
 #define     IP_HDR_LEN      (sizeof(struct ip_header_t)-1)      // =20
 #define     ARP_LEN         sizeof(struct arp_t)                // =28
 #define     ICMP_HDR_LEN    (sizeof(struct icmp_t)-1)           // =8
+#define     UDP_HDR_LEN     (sizeof(struct udp_t)-1)            // =8
 
 typedef enum                                                    // stack event signals
 {
@@ -254,12 +295,7 @@ struct ip4stack_t
     struct route_tbl_t      routeTable[ROUTE_TABLE_LENGTH];     // routing table info
     uint8_t                 interfaceCount;                     // number of attached interfaces
     struct net_interface_t  interfaces[INTERFACE_COUNT];        // array of interface data structures
-    
-    /* @@ to make this list more general, instead of named pointers
-     *    these could be replaced with an array of structure containing
-     *    a pointer to the function and a ip4_protocol_t identifier ...
-     */
-    void (*icmp_input_handler)(struct pbuf_t* const);           // ICMP response hendler
+    void (*icmp_input_handler)(struct pbuf_t* const);           // ICMP response handler
     void (*udp_input_handler)(struct pbuf_t* const);            // UDP packet input handler
     void (*tcp_input_handler)(struct pbuf_t* const);            // TCP packet input handler
 };

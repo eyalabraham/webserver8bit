@@ -163,20 +163,20 @@ void arp_input(struct pbuf_t* const p, struct net_interface_t* const netif)
     frame = (struct ethernet_frame_t*) p->pbuf;             // recast frame structure
     arp   = (struct arp_t*) &frame->payloadStart;           // pointer to ARP data payload
 
-    switch ( stack_byteswap(frame->type) )                  // determine frame type
+    switch ( stack_ntoh(frame->type) )                      // determine frame type
     {
         case TYPE_ARP:                                     // handle ARP frames
 /*
             printf(" [arp] htype %04x ptype %04x op %04x spa %08lx tpa %08lx\n",
-                 stack_byteswap(arp->htype),
-                 stack_byteswap(arp->ptype),
-                 stack_byteswap(arp->oper),
+                 stack_ntoh(arp->htype),
+                 stack_ntoh(arp->ptype),
+                 stack_ntoh(arp->oper),
                  arp->spa,
                  arp->tpa);
 */
-            if ( stack_byteswap(arp->htype) != ARP_ETH_TYPE || stack_byteswap(arp->ptype) != TYPE_IPV4 )
+            if ( stack_ntoh(arp->htype) != ARP_ETH_TYPE || stack_ntoh(arp->ptype) != TYPE_IPV4 )
                 break;                                      // drop the packet if not matching on network and protocol type
-            switch ( stack_byteswap(arp->oper) )            // action is based on the operation indicator
+            switch ( stack_ntoh(arp->oper) )                // action is based on the operation indicator
             {
                 case ARP_OP_REQUEST:
                     if ( arp->tpa == netif->ip4addr )       // is someone looking for us?
@@ -262,7 +262,7 @@ ip4_err_t arp_output(struct net_interface_t* const netif, struct pbuf_t* const p
     {                                                               // yes:
         copy_hwaddr(frame->src, netif->hwaddr);                     // copy source HW address as our address
         copy_hwaddr(frame->dest, hwaddr);                           // copy destination HW address
-        frame->type = stack_byteswap(TYPE_IPV4);                    // IPv4 frame type
+        frame->type = stack_ntoh(TYPE_IPV4);                        // IPv4 frame type
         if ( (netif->flags & (NETIF_FLAG_UP + NETIF_FLAG_LINK_UP)) && netif->linkoutput )
             result = netif->linkoutput(netif->state, p);            // send the frame *** p->len should already be set ***
         else
@@ -321,14 +321,14 @@ static ip4_err_t arp_send(struct net_interface_t* const netif, hwaddr_t *dest, h
         frame = (struct ethernet_frame_t*) p->pbuf;             // establish pointer to etherner frame
         copy_hwaddr(frame->dest, dest);                         // build request header
         copy_hwaddr(frame->src, src);
-        frame->type = stack_byteswap(TYPE_ARP);
+        frame->type = stack_ntoh(TYPE_ARP);
 
         arp = (struct arp_t*) &(frame->payloadStart);           // establish pointer to ARP request packet
-        arp->htype = stack_byteswap(ARP_ETH_TYPE);              // build ARP packet
-        arp->ptype = stack_byteswap(TYPE_IPV4);
+        arp->htype = stack_ntoh(ARP_ETH_TYPE);                  // build ARP packet
+        arp->ptype = stack_ntoh(TYPE_IPV4);
         arp->hlen = ARP_HLEN;
         arp->plen = ARP_PLEN;
-        arp->oper = stack_byteswap(oper);
+        arp->oper = stack_ntoh(oper);
         copy_hwaddr(arp->sha, sha);
         arp->spa = spa;
         copy_hwaddr(arp->tha, tha);

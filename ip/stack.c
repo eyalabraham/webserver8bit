@@ -26,9 +26,8 @@
 /* -----------------------------------------
    module globals
 ----------------------------------------- */
-struct ip4stack_t   stack;                                          // IP stack data structure
-
-static struct pbuf_t       pBuf[PACKET_BUFS];                    // transmit and receive buffer pointers
+struct ip4stack_t       stack;                          // IP stack data structure
+static struct pbuf_t    pBuf[PACKET_BUFS];              // transmit and receive buffer pointers
 
 
 /*------------------------------------------------
@@ -260,7 +259,7 @@ void pbuf_free(struct pbuf_t* const p)
 }
 
 /*------------------------------------------------
- * stack_byteswap()
+ * stack_ntoh()
  *
  *  big-endian to/from little-endian, 16bit bytes swap
  *
@@ -268,12 +267,33 @@ void pbuf_free(struct pbuf_t* const p)
  *  return: uint16 in little-endian
  *
  */
-uint16_t stack_byteswap(uint16_t w)
+uint16_t stack_ntoh(uint16_t w)
 {
     uint16_t    temp;
 
     temp  = (uint16_t)(w >> 8) & 0x00ff;
     temp |= (uint16_t)(w << 8) & 0xff00;
+
+    return temp;
+}
+
+/*------------------------------------------------
+ * stack_ntohl()
+ *
+ *  big-endian to little-endian 32bit bytes swap
+ *
+ *  param:  uint32 in big-endian
+ *  return: uint32 in little-endian
+ *
+ */
+uint32_t stack_ntohl(uint32_t dw)
+{
+    uint32_t    temp;
+
+    temp  = (uint32_t)(dw >> 24) & 0x000000ffUL;
+    temp |= (uint32_t)(dw >> 8)  & 0x0000ff00UL;
+    temp |= (uint32_t)(dw << 8)  & 0x00ff0000UL;
+    temp |= (uint32_t)(dw << 24) & 0xff000000UL;
 
     return temp;
 }
@@ -329,7 +349,7 @@ uint16_t stack_checksum(const void *dataptr, int len)
     }
 
     /* reorder sum, the caller must invert bits for Internet sum ! */
-    return stack_byteswap((uint16_t)acc);
+    return stack_ntoh((uint16_t)acc);
 }
 
 /*------------------------------------------------

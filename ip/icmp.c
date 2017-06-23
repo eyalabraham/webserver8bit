@@ -60,10 +60,10 @@ ip4_err_t icmp_ping_output(ip4_addr_t dest, uint16_t ident, uint16_t seq, uint8_
     {
         icmp_out = (struct icmp_t*) &(p->pbuf[FRAME_HDR_LEN + IP_HDR_LEN]);         // pointer to ICMP header
 
-        icmp_out->type_code = stack_byteswap(ECHO_REQ);                             // populate ICMP Ping request
+        icmp_out->type_code = stack_ntoh(ECHO_REQ);                                 // populate ICMP Ping request
         icmp_out->checksum = 0;                                                     // replace after calculating
-        icmp_out->id = stack_byteswap(ident);
-        icmp_out->seq = stack_byteswap(seq);
+        icmp_out->id = stack_ntoh(ident);
+        icmp_out->seq = stack_ntoh(seq);
         memcpy(&(icmp_out->payloadStart), payload, payloadLen);                     // copy payload
         icmp_out->checksum = ~(stack_checksum(icmp_out, ICMP_HDR_LEN + payloadLen));// calculate ICMP checksum
 

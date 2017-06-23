@@ -61,6 +61,12 @@
  * Network layer setup options
  *
  */
-#define     ROUTE_TABLE_LENGTH   2          // max number of entries in the routing table, must be .gte. to INTERFACE_COUNT
+#define     ROUTE_TABLE_LENGTH  2           // max number of entries in the routing table, must be .gte. to INTERFACE_COUNT
+
+/*
+ * UDP options
+ *
+ */
+#define     UDP_PCB_COUNT       2           // max number of concurrent open UDP connections (PCBs = protocol control block)
 
 #endif  /* __OPTIONS_H__ */

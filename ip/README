@@ -33,7 +33,7 @@ A rough ASCII sketch of the architecture and associated files:
  |                          | Transport                     |
  |                          | ~~~~~~~~~~                    |
  |                          | udp.c  tcp.c  icmp.c          |
- |                          | ump.h  tcp.h  icmp.h          |
+ |                          | udp.h  tcp.h  icmp.h          |
  |                          |                               |           ip4_output()
  |                          +-----------/\--------------\/--+ <----- [registered function per transport]
  |                          | Network                       |

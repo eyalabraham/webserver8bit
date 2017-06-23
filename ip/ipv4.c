@@ -50,9 +50,12 @@ void ip4_input(struct pbuf_t* const p, struct net_interface_t* const netif)
 
     /*
      * 1. validate header checksum, drop packet if bad
+     * 1a. validate destination IP against our IP, drop packet if no match
      * 2. switch on 'protocol' field and handle TCP, UDP or ICMP inputs
      * 3. call protocol handlers with pbuf
      * 4. @@ handling of fragmented packets here?
+     * 5. @@ If the header length 'ipHeaderLen' is greater than 5 (i.e., it is from 6 to 15)
+     *       it means that the options field is present and must be considered
      *
      */
 
@@ -62,8 +65,13 @@ void ip4_input(struct pbuf_t* const p, struct net_interface_t* const netif)
     {
         return;                                             // @@ report/record checksum error?
     }
+
+    if ( ip->destIp != netif->ip4addr )                     // compare destination IP to out network interface IP
+    {
+        return;                                             // drop the packet if there is no match
+    }
 /*
-    printf(" [ip] protocol %02x src %08lx dest %08lx\n",
+    printf(" [ipv4.c, ip4_input()] protocol %02x src %08lx dest %08lx\n",
          ip->protocol,
          ip->srcIp,
          ip->destIp);
@@ -116,9 +124,9 @@ ip4_err_t ip4_output(ip4_addr_t dest, ip4_protocol_t protocol, struct pbuf_t* co
      */
     ipHeader->verHeaderLength = IP_VER + IP_IHL;
     ipHeader->qos = IP_QOS;
-    ipHeader->length = stack_byteswap((p->len - FRAME_HDR_LEN));
+    ipHeader->length = stack_ntoh((p->len - FRAME_HDR_LEN));
     ipHeader->id = 0;                                                           // @@ need a proper ID schema
-    ipHeader->defrag = stack_byteswap(0 | IP_FLAG_DF);
+    ipHeader->defrag = stack_ntoh(0 | IP_FLAG_DF);
     ipHeader->ttl = IP_TTL;
     ipHeader->protocol = protocol;
     ipHeader->checksum = 0;                                                     // replace after calculating
@@ -178,8 +186,7 @@ ip4_err_t ip4_output(ip4_addr_t dest, ip4_protocol_t protocol, struct pbuf_t* co
  *  ICMP request and reply handler
  *  accepts ICMP requests and responds to them
  *
- * param:  pointer to the IP packet start point inside the pbuf data area
- *         *not* a pointer to the pbuf itself!
+ * param:  pbuf pointer of the input packet
  *         network interface the packet came from
  * return: none
  *
@@ -200,7 +207,7 @@ static void ip4_icmp_handler(struct pbuf_t* const p, struct net_interface_t* con
     ip_in = (struct ip_header_t*) &(((struct ethernet_frame_t*)(p->pbuf))->payloadStart); // pointer to IP packet header
 
     ipHeaderLen = (ip_in->verHeaderLength & 0x0f) * 4;                          // calculate header length in bytes
-    icmp_in = (struct icmp_t*)(((uint8_t*) ip_in) + ipHeaderLen);               // pointer the ICMP header
+    icmp_in = (struct icmp_t*)(((uint8_t*) ip_in) + ipHeaderLen);               // pointer to the ICMP header
 
     payloadLen = p->len - FRAME_HDR_LEN - ipHeaderLen - ICMP_HDR_LEN;           // calculate ICMP payload length in bytes
 
@@ -211,7 +218,7 @@ static void ip4_icmp_handler(struct pbuf_t* const p, struct net_interface_t* con
             payloadLen);
 */
 
-    switch ( stack_byteswap(icmp_in->type_code) )
+    switch ( stack_ntoh(icmp_in->type_code) )
     {
         case ECHO_REQ:                                                          // handle ICMP ping request by responding to it
             q = pbuf_allocate();                                                // allocate a pbuf and establish pointers
@@ -222,16 +229,16 @@ static void ip4_icmp_handler(struct pbuf_t* const p, struct net_interface_t* con
 
             ip_out->verHeaderLength = IP_VER + IP_IHL;                          // populate reply's IP header
             ip_out->qos = IP_QOS;
-            ip_out->length = stack_byteswap(IP_HDR_LEN + ICMP_HDR_LEN + payloadLen);
+            ip_out->length = stack_ntoh(IP_HDR_LEN + ICMP_HDR_LEN + payloadLen);
             ip_out->id = ip_in->id;
-            ip_out->defrag = stack_byteswap(0 | IP_FLAG_DF);
+            ip_out->defrag = stack_ntoh(0 | IP_FLAG_DF);
             ip_out->ttl = IP_TTL;
             ip_out->protocol = IP4_ICMP;
             ip_out->checksum = 0;                                               // replace after calculating
             ip_out->srcIp = ip_in->destIp;                                      // @@ should this be netif->ip4addr?
             ip_out->destIp = ip_in->srcIp;
 
-            icmp_out->type_code = stack_byteswap(ECHO_REPLY);                   // populate ICMP reply header
+            icmp_out->type_code = stack_ntoh(ECHO_REPLY);                       // populate ICMP reply header
             icmp_out->checksum = 0;                                             // replace after calculating
             icmp_out->id = icmp_in->id;
             icmp_out->seq = icmp_in->seq;
