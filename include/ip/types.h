@@ -271,13 +271,7 @@ struct net_interface_t                                          // general netwo
 #define     ARP_LEN         sizeof(struct arp_t)                // =28
 #define     ICMP_HDR_LEN    (sizeof(struct icmp_t)-1)           // =8
 #define     UDP_HDR_LEN     (sizeof(struct udp_t)-1)            // =8
-
-typedef enum                                                    // stack event signals
-{
-    SIG_TX_PACKET_DROP,
-    SIG_RX_PACKET_DROP,
-    SIG_ARP_ERROR
-} stack_sig_t;
+#define     PACKET_CRC_LEN  4                                   // =4 (automatically added by link driver or device)
 
 struct route_tbl_t                                              // source: https://en.wikipedia.org/wiki/Routing_table
 {
@@ -290,7 +284,7 @@ struct route_tbl_t                                              // source: https
 struct ip4stack_t
 {
     char                    hostname[HOSTNAME_LENGTH];          // host name string identifier
-    stack_sig_t             signal;                             // event signal
+    uint16_t                mtu;                                // stack MTU limit
     uint8_t                 routeTableLength;                   // max number of entries in the route table
     struct route_tbl_t      routeTable[ROUTE_TABLE_LENGTH];     // routing table info
     uint8_t                 interfaceCount;                     // number of attached interfaces

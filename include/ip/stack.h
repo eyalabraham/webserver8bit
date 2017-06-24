@@ -36,7 +36,6 @@ void                            stack_set_protocol_handler(ip4_protocol_t,      
 struct pbuf_t* const            pbuf_allocate(void);                                    // allocate a transmit or receive buffer
 void                            pbuf_free(struct pbuf_t* const);                        // free a buffer allocation
 
-void                            stack_sig(stack_sig_t);                                 // signal stack events
 uint16_t                        stack_ntoh(uint16_t);                                   // big-endian to little-endian 16bit bytes swap
 uint32_t                        stack_ntohl(uint32_t);                                  // big-endian to little-endian 32bit bytes swap
 uint16_t                        stack_checksum(const void*, int);                       // checksum calculation

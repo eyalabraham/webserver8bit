@@ -120,7 +120,7 @@ struct enc28j60_t
 
 #define     INIT_ERXFCON        0xa1            // see section 8.0 RECEIVE FILTERS, pg.49
 
-#define     INIT_MAMXFL         1518            // max frame size of 1518 bytes
+#define     INIT_MAMXFL         (MTU+18)        // max frame MTU + Layer2 header + CRC, size of 1518 bytes
 
 #if FULL_DUPLEX
 #define     INIT_MABBIPG        0x15            // transmission packet gap definitions

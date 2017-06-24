@@ -28,7 +28,8 @@ typedef enum                        // stack wide error codes
     ERR_TX_COLL   = -10,            // too many transmit collisions, Tx aborter
     ERR_TX_LCOLL  = -11,            // late-collision during transmit, possible full/half-duplex mismatch
     ERR_IN_USE    = -12,            // UDP or TCP IP address and/or port are already bound to by another connection or are invalid
-    ERR_NOT_BOUND = -13             // PCB is not bound
+    ERR_NOT_BOUND = -13,            // PCB is not bound
+    ERR_MTU_EXD   = -14             // MTU size exceeded
 } ip4_err_t;
 
 #endif /* __IP4ERROR_H__ */

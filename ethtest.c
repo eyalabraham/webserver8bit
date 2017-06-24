@@ -157,37 +157,6 @@ void ping_input(struct pbuf_t* const p)
 }
 
 /*------------------------------------------------
- * sntp_process()
- *
- *  NTP processing of received timestamp
- *  source LwIP 2.0.2, sntp.c
- *
- * param:  pointer to response pbuf, source IP address and source port
- * return: none
- *
- */
-void sntp_process(struct ntp_timestamp_t *receive_timestamp)
-{
-    uint32_t    rx_secs, t, us;
-    int         is_1900_based;
-    time_t      tim;
-
-  /* convert NTP time (1900-based) to unix GMT time (1970-based)
-   * if MSB is 0, SNTP time is 2036-based!
-   */
-  rx_secs = stack_ntohl(receive_timestamp->seconds);
-  //printf("NTP time, net order: %08lx host order: %08lx\n", receive_timestamp->seconds, rx_secs);
-  is_1900_based = ((rx_secs & 0x80000000) != 0);
-  t = is_1900_based ? (rx_secs - DIFF_SEC_1900_1970) : (rx_secs + DIFF_SEC_1970_2036);
-  tim = t;
-
-  us = stack_ntohl(receive_timestamp->fraction) / 4295;
-  //SNTP_SET_SYSTEM_TIME_US(t, us);
-  /* display local time from GMT time */
-  printf("NTP time: %s", ctime(&tim));
-}
-
-/*------------------------------------------------
  * ntp_input()
  *
  *  callback to receive NTP server responses and process time information
@@ -199,9 +168,25 @@ void sntp_process(struct ntp_timestamp_t *receive_timestamp)
 void ntp_input(struct pbuf_t* const p, const ip4_addr_t srcIP, const uint16_t srcPort)
 {
     struct ntp_t   *ntpResponse;
+    uint32_t        rx_secs, t, us;
+    int             is_1900_based;
+    time_t          tim;
 
     ntpResponse = (struct ntp_t*) &(p->pbuf[FRAME_HDR_LEN+IP_HDR_LEN+UDP_HDR_LEN]); // crude way to get pointer the NTP response payload
-    sntp_process(&(ntpResponse->recTimestamp));
+
+    /* convert NTP time (1900-based) to unix GMT time (1970-based)
+     * if MSB is 0, SNTP time is 2036-based!
+     */
+    rx_secs = stack_ntohl(ntpResponse->recTimestamp.seconds);
+    //printf("NTP time, net order: %08lx host order: %08lx\n", ntpResponse->recTimestamp.seconds, rx_secs);
+    is_1900_based = ((rx_secs & 0x80000000) != 0);
+    t = is_1900_based ? (rx_secs - DIFF_SEC_1900_1970) : (rx_secs + DIFF_SEC_1970_2036);
+    tim = t;
+
+    us = stack_ntohl(ntpResponse->recTimestamp.fraction) / 4295;
+    //SNTP_SET_SYSTEM_TIME_US(t, us);
+    /* display local time from GMT time */
+    printf("NTP time: %s", ctime(&tim));
 }
 
 /*------------------------------------------------

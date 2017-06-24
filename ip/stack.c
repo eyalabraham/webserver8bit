@@ -45,6 +45,8 @@ void stack_init(void)
     // initialize IP stack structure
     memset(&stack, 0, sizeof(struct ip4stack_t));
     strncpy(HOSTNAME, stack.hostname, HOSTNAME_LENGTH);
+    stack.mtu = MTU;
+    stack.routeTableLength = ROUTE_TABLE_LENGTH;
     stack.interfaceCount = INTERFACE_COUNT;
 
     // initialize buffer allocation

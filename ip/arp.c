@@ -198,8 +198,7 @@ void arp_input(struct pbuf_t* const p, struct net_interface_t* const netif)
             ip4_input(p, netif);                            // all inputs go here from any network interface
             break;  /* end of handling TYPE_IPV4 */
 
-        default:
-            inputStub(p, netif);                            // drop everything else @@ handle unidentified frame type
+        default:;                                           // drop everything else @@ handle unidentified frame types
     } /* end of frame type switch */
 }
 

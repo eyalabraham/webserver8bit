@@ -41,7 +41,7 @@ static void ip4_icmp_handler(struct pbuf_t* const, struct net_interface_t* const
 void ip4_input(struct pbuf_t* const p, struct net_interface_t* const netif)
 {
     struct ip_header_t      *ip;
-    uint16_t                 chksum;
+    uint16_t                 chksum, frag;
     int                      ipHeaderLen;
 
     PRNT_FUNC;
@@ -66,7 +66,7 @@ void ip4_input(struct pbuf_t* const p, struct net_interface_t* const netif)
         return;                                             // @@ report/record checksum error?
     }
 
-    if ( ip->destIp != netif->ip4addr )                     // compare destination IP to out network interface IP
+    if ( ip->destIp != netif->ip4addr )                     // compare destination IP to our network interface IP
     {
         return;                                             // drop the packet if there is no match
     }
@@ -76,6 +76,13 @@ void ip4_input(struct pbuf_t* const p, struct net_interface_t* const netif)
          ip->srcIp,
          ip->destIp);
 */
+    frag = stack_ntoh(ip->defrag);
+    if ( (frag & IP_FLAG_MF) ||                             // @@ drop packets that are fragmented, no reassemble support
+         (frag & 0x1fff) > 0 )
+    {
+        return;
+    }
+
     switch ( ip->protocol )                                 // get IP packet protocol
     {
         case IP4_ICMP:                                      // handle ICMP requests
@@ -117,6 +124,9 @@ ip4_err_t ip4_output(ip4_addr_t dest, ip4_protocol_t protocol, struct pbuf_t* co
     struct ip_header_t     *ipHeader;
     struct route_tbl_t     *route;
     uint8_t                 i;
+
+    if ( p->len > (FRAME_HDR_LEN + MTU + PACKET_CRC_LEN) )                      // @@ drop packets that are larger than MTU, no fragmentation support
+        return ERR_MTU_EXD;
 
     ipHeader = (struct ip_header_t*) &(p->pbuf[FRAME_HDR_LEN]);
 

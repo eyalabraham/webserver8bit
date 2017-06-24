@@ -177,6 +177,7 @@ To-Dos
     the current implementation calls the enc26j60 function directly
 12. add code to interface_link_state() or other function to set link state in the interface
     structure and act by calling a registered callback
+13. fragmentation and assembly of IPv4 packets
       
  File list
 -----------------------------------------
