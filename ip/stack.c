@@ -14,6 +14,7 @@
 #include    <stdio.h>
 
 #include    "ip/stack.h"
+#include    "ip/arp.h"
 #include    "ip/options.h"
 
 #if  SYSTEM_DOS
@@ -28,7 +29,7 @@
 ----------------------------------------- */
 struct ip4stack_t       stack;                          // IP stack data structure
 static struct pbuf_t    pBuf[PACKET_BUFS];              // transmit and receive buffer pointers
-
+static struct timer_t   timers[STACK_TIMER_COUNT];      // stack timers
 
 /*------------------------------------------------
  * stack_init()
@@ -54,6 +55,16 @@ void stack_init(void)
     assert((PACKET_BUFS > 0) && (PACKET_BUFS <= MAX_PBUFS));
     for (i = 0; i < PACKET_BUFS; i++)
         pBuf[i].len = PBUF_FREE;
+
+    // initialize timers
+    for (i = 0; i < STACK_TIMER_COUNT; i++)
+    {
+        timers[i].milisec_timeout = 0;
+        timers[i].last_trigger = 0;
+        timers[i].timer_callback = NULL;
+    }
+
+    arp_init();
 }
 
 /*------------------------------------------------
@@ -158,10 +169,10 @@ uint32_t stack_time(void)
     uint32_t            dosTimetic;                 // DOS time tick temp
 
     _dos_gettime(&sysTime);                         // get system time
-    dosTimetic = (uint32_t) (10 * sysTime.hsecond) +
-                 (uint32_t) (1000 * sysTime.second) +
-                 (uint32_t) (60000 * sysTime.minute) +
-                 (uint32_t) (3600000 * sysTime.hour);
+    dosTimetic = (     10 * (uint32_t) sysTime.hsecond) +
+                 (   1000 * (uint32_t) sysTime.second) +
+                 (  60000 * (uint32_t) sysTime.minute) +
+                 (3600000 * (uint32_t) sysTime.hour);
     return dosTimetic;
 #endif  /* SYSTEM_DOS */
 #if  SYSTEM_LMTE
@@ -173,9 +184,8 @@ uint32_t stack_time(void)
  * stack_timers()
  *
  *  handle stack timers and timeouts for all network interfaces
- *  go through all defined interfaces on this stack and through all
- *  registered timers and timeouts
- *  invoke appropriate handlers that were registered by the protocols
+ *  go through all registered timers and timeouts
+ *  invoke appropriate handlers that were registered
  *
  *  param:  none
  *  return: none
@@ -183,6 +193,55 @@ uint32_t stack_time(void)
  */
 void stack_timers(void)
 {
+    int         i;
+    uint32_t    now;
+
+    for (i = 0; i < STACK_TIMER_COUNT; i++)                 // scan the timer list
+    {
+        if ( timers[i].milisec_timeout == 0 )               // skip empty timer slots
+            continue;
+        else
+        {
+            now = stack_time();
+            if ( (now - timers[i].last_trigger) >= timers[i].milisec_timeout )
+            {                                               // if milisec time-out has elapsed
+                timers[i].last_trigger = now;               // reset the last trigger time
+                timers[i].timer_callback(now);              // and invoke the callback function
+            }
+        }
+    }
+}
+
+/*------------------------------------------------
+ * stack_set_timer()
+ *
+ *  register a timer callback to call every time milisec time-out
+ *  expires.
+ *
+ *  param:  timeout interval in milisec, callback function to register
+ *  return: ERR_OK if registration is successful, ip4_err_t with error code if not
+ *
+ */
+ip4_err_t stack_set_timer(uint32_t timeout, timer_callback_fn timerFunc)
+{
+    int         i;
+    ip4_err_t   result = ERR_MEM;
+
+    for (i = 0; i < STACK_TIMER_COUNT; i++)                 // scan list of timers
+    {
+        if ( timers[i].milisec_timeout != 0 )               // skip defined timers
+            continue;
+        else
+        {                                                   // when an empty slot is found
+            timers[i].milisec_timeout = timeout;            // set timeout value for the timer
+            timers[i].last_trigger = stack_time();          // initialize the trigger time
+            timers[i].timer_callback = timerFunc;           // setup the callback
+            result = ERR_OK;                                // exit ok
+            break;
+        }
+    }
+
+    return result;
 }
 
 /*------------------------------------------------
@@ -301,7 +360,7 @@ uint32_t stack_ntohl(uint32_t dw)
 }
 
 /*------------------------------------------------
- * stack_checksum()
+ * stack_checksumEx()
  *
  * Calculates checksum for 'len' bytes starting at 'dataptr'
  * accumulator size limits summable length to 64k
@@ -311,16 +370,17 @@ uint32_t stack_ntohl(uint32_t dw)
  *
  * param:  dataptr points to start of data to be summed at any boundary
  *         len length of data to be summed
+ *         externally calculated accumulated sum
  * return: host order (!) checksum (non-inverted Internet sum)
  *
  */
-uint16_t stack_checksum(const void *dataptr, int len)
+uint16_t stack_checksumEx(const void *dataptr, int len, uint32_t accSum)
 {
     uint32_t        acc;
     uint16_t        src;
     const uint8_t  *octetptr;
 
-    acc = 0;
+    acc = accSum;
     /* dataptr may be at odd or even addresses */
     octetptr = (const uint8_t*)dataptr;
     while (len > 1)
@@ -362,7 +422,7 @@ uint16_t stack_checksum(const void *dataptr, int len)
  *  source: https://github.com/espressif/esp-idf/blob/master/components/lwip/core/ipv4/ip4_addr.c
  *
  *  param:  IP address in 32bit representation, pointer to output string, string length
- *          length of the string should have space for 'xxx.xxx.xxx.xxx\0'
+ *          length of the string should have space for at least 16 characters 'xxx.xxx.xxx.xxx\0'
  *          a '\0' will always be inserted at the last string position as a terminator.
  *  return: pointer to output string
  *
@@ -377,7 +437,7 @@ char* stack_ip4addr_ntoa(ip4_addr_t s_addr, char* const buf, uint8_t buflen)
     uint8_t     i;
     int         len = 0;
 
-    if ( n > 0 )
+    if ( buflen >= 16 )                         // require a minimum amount of space in the string buffer
     {
         rp = buf;
         ap = (uint8_t *) &s_addr;
@@ -396,7 +456,7 @@ char* stack_ip4addr_ntoa(ip4_addr_t s_addr, char* const buf, uint8_t buflen)
                 if (len++ >= buflen)
                 {
                     buf[0] = 0;
-                    return NULL;
+                    return buf;
                 }
                 *rp++ = inv[i];
             }
@@ -404,7 +464,7 @@ char* stack_ip4addr_ntoa(ip4_addr_t s_addr, char* const buf, uint8_t buflen)
             if (len++ >= buflen)
             {
                 buf[0] = 0;
-                return NULL;
+                return buf;
             }
             *rp++ = '.';
             ap++;

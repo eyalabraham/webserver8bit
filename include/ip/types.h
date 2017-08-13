@@ -131,7 +131,6 @@ typedef enum
     ARP_FLAG_INIT = 0,                          // empty ARP table slot
     ARP_FLAG_STATIC = 1,                        // static entry in the ARP table, will not be removed or replaced
     ARP_FLAG_DYNA = 2,                          // dynamic entry, can we swapped out if table becomes full
-    ARP_FLAG_SHOW = 128                         // used with arp_show()
 } arp_flags_t;
 
 #define     ARP_ETH_TYPE            1
@@ -158,7 +157,15 @@ struct arp_tbl_t                                // data structure of ARP table e
     ip4_addr_t  ipAddress;                      // IP address
     hwaddr_t    hwAddress;                      // MAC address
     arp_flags_t flags;                          // flags
-    uint8_t     lru;                            // address usage counter for optional LRU garbage collection
+    uint32_t    cached;                         // time entry was cached
+};
+
+struct arp_queue_t
+{
+    ip4_addr_t      ipAddr;                     // IP address pending an ARP resolution
+    struct pbuf_t  *p;                          // pointer to queued pbuf
+    struct net_interface_t *netif;              // network interface
+    uint32_t        queued;                     // time the packet was queued
 };
 
 /* -----------------------------------------
@@ -194,13 +201,26 @@ struct udp_t
 
 typedef enum                                                    // protocol control block state
 {
-    FREE        = 0,                                            // PCB is free to use
-    BOUND       = 1                                             // protocol is bound
+    ANY_STATE    = -1,                                          // not a true state, use only as wild-card for PCB search
+    FREE         =  0,                                          // PCB is free to use
+    BOUND        =  1,                                          // protocol is bound, after calling xxx_bind()
+    LISTEN       =  2,                                          // TCP PCB in listen mode after calling tcp_listen()
+    SYN_RECEIVED =  3,                                          // sync received by server and sync/acknowledge sent
+    SYN_SENT     =  4,                                          // client sent sync
+    ESTABLISHED  =  5,                                          // connection established
+    CLOSE_WAIT   =  6,                                          // received FIN and entering passive close states
+    LAST_ACK     =  7,                                          // last ACK received in close states, so closing connection
+    FIN_WAIT1    =  8,                                          // Active close states ...
+    FIN_WAIT2    =  9,
+    CLOSING      =  10,
+    TIME_WAIT    =  11
 } pcb_state_t;
 
 typedef void (*udp_recv_callback)(struct pbuf_t* const,         // UDP data receive callback function
                                   const ip4_addr_t,             // passes pointer to pbuf, source IP
                                   const uint16_t);              // and source port
+
+typedef int     pcbid_t;                                        // PCB identifier
 
 struct udp_pcb_t
 {
@@ -213,6 +233,99 @@ struct udp_pcb_t
 };
 
 /* -----------------------------------------
+   TCP
+----------------------------------------- */
+#define     FLAGS_MASK          0x01ff
+#define     TCP_FLAG_NS         0x0100
+#define     TCP_FLAG_CWR        0x0080
+#define     TCP_FLAG_ECE        0x0040
+#define     TCP_FLAG_URG        0x0020
+#define     TCP_FLAG_ACK        0x0010
+#define     TCP_FLAG_PSH        0x0008
+#define     TCP_FLAG_RST        0x0004
+#define     TCP_FLAG_SYN        0x0002
+#define     TCP_FLAG_FIN        0x0001
+
+struct tcp_t
+{
+    uint16_t    srcPort;                                        // source application port
+    uint16_t    destPort;                                       // destination application port
+    uint32_t    seq;                                            // sequence number
+    uint32_t    ack;                                            // acknowledge number
+    uint16_t    dataOffsAndFlags;                               // TCP data offset and flags
+    uint16_t    window;                                         // TCP window size
+    uint16_t    checksum;                                       // checksum
+    uint16_t    urgentPtr;                                      // offset from the sequence number indicating the last urgent data byte
+    uint8_t     payloadStart;                                   // start of payload or options
+};
+
+typedef enum                                                    // enumeration of notification events
+{
+    TCP_EVENT_CLOSE,                                            // the remote side closed the TCP connection
+    TCP_EVENT_REMOTE_RST,                                       // remote side reset the connection
+    TCP_EVENT_URGENT                                            // urgent data segment arrived
+}tcp_event_t;
+
+typedef void (*tcp_recv_callback)(struct pbuf_t* const,         // TCP data receive callback function
+                                  const ip4_addr_t,             // passes pointer to pbuf, source IP
+                                  const uint16_t);              // and source port
+
+typedef void (*tcp_accept_callback)(pcbid_t);                   // TCP server accept connection callback function
+typedef void (*tcp_notify_callback)(pcbid_t, tcp_event_t);      // event notification via callback function
+
+struct tcp_opt_t                                                // supported TCP options
+{
+    uint16_t            mss;                                    // max segment size
+    uint8_t             winScale;                               // window scale
+    uint32_t            time;                                   // time stamp sent or to echo
+};
+
+struct tcp_pcb_t
+{
+    /* connection binding and state
+     */
+    pcb_state_t         state;                                  // PCB state
+    uint32_t            timeInState;                            // time stamp on state entry
+    ip4_addr_t          localIP;                                // local IP address to bind this PCB
+    uint16_t            localPort;                              // local port to bind this PCB
+    ip4_addr_t          remoteIP;                               // remote IP source for a client PCB
+    uint16_t            remotePort;                             // remote port of source IP for a client PCB
+
+    /* local TCP send parameters and options
+     */
+    uint32_t            SND_UNA;                                // send unacknowledged
+    uint32_t            SND_NXT;                                // send next
+    uint16_t            SND_WND;                                // send window
+    uint16_t            SND_UP;                                 // send urgent pointer
+    uint32_t            SND_WL1;                                // segment sequence number used for last window update
+    uint32_t            SND_WL2;                                // segment acknowledgment number used for last window update
+    uint32_t            ISS;                                    // initial send sequence number
+    struct tcp_opt_t    SND_opt;                                // TCP options
+
+    /* parameters received on the last segment SEG_... and
+     * parameters on the remote peer RCV_...
+     */
+    uint32_t            SEG_SEQ;                                // segment sequence number
+    uint32_t            SEG_ACK;                                // segment acknowledgment number
+    uint16_t            SEG_LEN;                                // segment length
+    uint16_t            SEG_WND;                                // segment window
+    uint16_t            SEG_UP;                                 // segment urgent pointer
+
+    uint32_t            RCV_NXT;                                // receive next
+    uint16_t            RCV_WND;                                // receive window
+    uint16_t            RCV_UP;                                 // receive urgent pointer
+    uint32_t            IRS;                                    // initial receive sequence number
+    struct tcp_opt_t    RCV_opt;                                // TCP options
+
+    /* call back functions for notification
+     * functionality
+     */
+    tcp_recv_callback   tcp_receive ;                           // TCP data receiver callback handler
+    tcp_accept_callback tcp_accept_fn;                          // client connection requests handler on a server PCB
+    tcp_notify_callback tcp_notify_fn;                          // optional event notification callback pointer
+};
+
+/* -----------------------------------------
    Packet buffer
 ----------------------------------------- */
 #define     PBUF_FREE               0                           // packet buffer is free to use
@@ -221,7 +334,7 @@ struct udp_pcb_t
 struct pbuf_t
 {
     int         len;                                            // bytes count in buffer, == 0 is puffer is free
-    uint8_t     pbuf[PACKET_BUF_SIZE];                          // packet buffer type
+    uint8_t     pbuf[PACKET_BUF_SIZE];                          // packet buffer data bytes
 };
 
 /* -----------------------------------------
@@ -271,6 +384,7 @@ struct net_interface_t                                          // general netwo
 #define     ARP_LEN         sizeof(struct arp_t)                // =28
 #define     ICMP_HDR_LEN    (sizeof(struct icmp_t)-1)           // =8
 #define     UDP_HDR_LEN     (sizeof(struct udp_t)-1)            // =8
+#define     TCP_HDR_LEN     (sizeof(struct tcp_t)-1)            // =20
 #define     PACKET_CRC_LEN  4                                   // =4 (automatically added by link driver or device)
 
 struct route_tbl_t                                              // source: https://en.wikipedia.org/wiki/Routing_table
@@ -294,9 +408,13 @@ struct ip4stack_t
     void (*tcp_input_handler)(struct pbuf_t* const);            // TCP packet input handler
 };
 
+typedef void (*timer_callback_fn)(uint32_t);                    // timer callback function prototype
+
 struct timer_t
 {
-    uint32_t    timeout;                                        // timeout
+    uint32_t            milisec_timeout;                        // timeout interval in milisec
+    uint32_t            last_trigger;                           // last time stamp the timer was triggered
+    timer_callback_fn   timer_callback;                         // registered timer callback function
 };
 
 #endif /* __IP4TYPES_H__ */

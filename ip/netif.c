@@ -52,7 +52,6 @@ ip4_err_t interface_init(struct net_interface_t* const netif)
     netif->flags = IF_FLAG_INIT;                        // device capabilities and identification
     strncpy(netif->name, ETHIF_NAME, ETHIF_NAME_LENGTH);
 
-    netif->arpTable[0].flags = ARP_FLAG_SHOW;           // tag one record as starting point for arp_show()
     arp_tbl_entry(netif,                                // add loop-back IP address
                   IP4_ADDR(127,0,0,1),
                   netif->hwaddr,

@@ -18,6 +18,7 @@
 /* -----------------------------------------
    ARP interface and utility functions
 ----------------------------------------- */
+void            arp_init(void);                             // initialize ARP functionality
 hwaddr_t* const arp_query(struct net_interface_t* const,    // search the table for HW address of an IP address
                           ip4_addr_t);
 ip4_err_t arp_tbl_entry(struct net_interface_t* const,      // add or update an ARP entry to the table

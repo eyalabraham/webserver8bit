@@ -19,6 +19,7 @@
 #include    "ip/arp.h"
 #include    "ip/icmp.h"
 #include    "ip/udp.h"
+#include    "ip/tcp.h"
 
 #include    "ip/error.h"
 #include    "ip/types.h"
@@ -29,8 +30,8 @@
    definitions
 ----------------------------------------- */
 // test application
-enum {ARP, PING, NTP} whatToDo;
-#define     USAGE                   "ethtest -r {ARP and PING response} | -p {ping an address} | -t {NTP}\n"
+enum {ARP, PING, NTP, SRVR, CLNT} whatToDo;
+#define     USAGE                   "ethtest -r {ARP and PING response} | -p {ping an address} | -t {NTP} | -s {TCP server} | -c {TCP client}\n"
 
 // PING
 #define     WAIT_FOR_PING_RESPONSE  1000            // in mSec
@@ -45,7 +46,7 @@ enum {ARP, PING, NTP} whatToDo;
 #define     NTP_MINDISP             .005            // minimum dispersion increment (s)
 #define     NTP_MAXDIST             1               // distance threshold (1 s)
 #define     NTP_MAXSTRAT            16              // maximum stratum number
-#define     NTP_REQUEST_INTERVAL    20000           // mSec
+#define     NTP_REQUEST_INTERVAL    60000           // mSec
 
 #define     NTP_LI_NONE             0x00            // NTP Leap Second indicator (b7..b6)
 #define     NTP_LI_ADD_SEC          0x40
@@ -121,7 +122,9 @@ struct ntp_t
 ----------------------------------------- */
 
 uint16_t        rxSeq;
+int             issueTcpClose = 0, clientState = -1;
 char            ip[17];
+pcbid_t         tcpListner, tcpServer, tcpClient;
 
 /*------------------------------------------------
  * ping_input()
@@ -190,6 +193,59 @@ void ntp_input(struct pbuf_t* const p, const ip4_addr_t srcIP, const uint16_t sr
 }
 
 /*------------------------------------------------
+ * notify_callback()
+ *
+ *  callback to notify TCP connection closure
+ *
+ * param:  PCB ID of new connection
+ * return: none
+ *
+ */
+void notify_callback(pcbid_t connection, tcp_event_t reason)
+{
+    ip4_addr_t  ip4addr;
+
+    printf("==> ");
+    switch ( reason )
+    {
+        case TCP_EVENT_CLOSE:
+            printf("connection closed by");
+            issueTcpClose = 1;                          // remote client closed the connection, issu a close to go from CLOSE_WAIT to LAST_ACK
+            break;
+
+        case TCP_EVENT_REMOTE_RST:
+            printf("connection reset by");
+            break;
+
+        default:
+            printf("unknown event %d from", reason);
+    }
+
+    ip4addr = tcp_remote_addr(connection);
+    stack_ip4addr_ntoa(ip4addr, ip, 17);
+    printf(": %s\n", ip);
+}
+
+/*------------------------------------------------
+ * accept_callback()
+ *
+ *  callback to accept TCP connections
+ *
+ * param:  PCB ID of new connection
+ * return: none
+ *
+ */
+void accept_callback(pcbid_t connection)
+{
+    ip4_addr_t  ip4addr;
+
+    ip4addr = tcp_remote_addr(connection);
+    stack_ip4addr_ntoa(ip4addr, ip, 17);
+    printf("==> accepted new connection from: %s\n", ip);
+    tcpServer = connection;
+}
+
+/*------------------------------------------------
  * main()
  *
  *
@@ -201,7 +257,7 @@ int main(int argc, char* argv[])
     ip4_err_t               result;
     struct net_interface_t *netif;
     struct udp_pcb_t       *ntp;
-    uint32_t                lastNtpRequest;
+    uint32_t                now, lastNtpRequest;
     struct ntp_t            ntpPayload;
 
     printf("Build: ethtest.exe %s %s\n", __DATE__, __TIME__);
@@ -219,6 +275,21 @@ int main(int argc, char* argv[])
     interface_set_addr(netif, IP4_ADDR(192,168,1,19),               // setup static IP addressing
                               IP4_ADDR(255,255,255,0),
                               IP4_ADDR(192,168,1,1));
+
+    /* test link state and send gratuitous ARP
+     *
+     */
+    linkState = interface_link_state(netif);
+    printf("link state = '%s'\n", linkState ? "up" : "down");
+
+    if ( linkState )
+        result = arp_gratuitous(netif);                             // if link is 'up' send a Gratuitous ARP with our IP address
+
+    if ( result != ERR_OK )
+    {
+        printf("arp_gratuitous() failed with %d\n", result);
+        return -1;
+    }
 
     /* parse command line variables
      *
@@ -261,26 +332,42 @@ int main(int argc, char* argv[])
             assert(udp_recv(ntp, ntp_input) == ERR_OK);
             lastNtpRequest = stack_time();
         }
+        else if ( strcmp(argv[i], "-s") == 0 )
+        {
+            whatToDo = SRVR;
+            /* prepare a TCP serve
+             * listening to connections on port 7 ECHO
+             *
+             */
+            tcp_init();                                                         // initialize TCP
+            tcpListner = tcp_new();                                             // get a TCP
+            printf("tcp_new() -> %d\n", tcpListner);
+            assert(tcpListner >= 0);                                            // make sure it is valid
+            assert(tcp_bind(tcpListner,IP4_ADDR(192,168,1,19),7) == ERR_OK);    // bind on port 7
+            assert(tcp_listen(tcpListner) == ERR_OK);                           // listen to bound IP/port
+            assert(tcp_notify(tcpListner, notify_callback) == ERR_OK);          // notify on remote connection close
+            assert(tcp_accept(tcpListner, accept_callback) == ERR_OK);          // connection acceptance callback
+        }
+        else if ( strcmp(argv[i], "-c") == 0 )
+        {
+            whatToDo = CLNT;
+            /* prepare a TCP client
+             * to connect from port 60001 ECHO
+             *
+             */
+            tcp_init();                                                         // initialize TCP
+            tcpClient = tcp_new();                                              // get a TCP
+            printf("tcp_new() -> %d\n", tcpClient);
+            assert(tcpClient >= 0);                                             // make sure it is valid
+            assert(tcp_bind(tcpClient,IP4_ADDR(192,168,1,19),60001) == ERR_OK); // bind on port 60001
+            assert(tcp_notify(tcpClient, notify_callback) == ERR_OK);           // notify on remote connection close
+            assert(tcp_connect(tcpClient,IP4_ADDR(192,168,1,10),7) == ERR_OK);  // try to connect
+        }
         else
         {
             printf("%s\n", USAGE);
             return -1;
         }
-    }
-
-    /* test link state and send gratuitous ARP
-     *
-     */
-    linkState = interface_link_state(netif);
-    printf("link state = '%s'\n", linkState ? "up" : "down");
-
-    if ( linkState )
-        result = arp_gratuitous(netif);                             // if link is 'up' send a Gratuitous ARP with our IP address
-
-    if ( result != ERR_OK )
-    {
-        printf("arp_gratuitous() failed with %d\n", result);
-        done = 1;
     }
 
     /* main loop
@@ -314,22 +401,50 @@ int main(int argc, char* argv[])
         /* @@ application goes here?
          *
          */
+
+        if ( whatToDo == CLNT )                                             // when testing a TCP client
+        {
+            if ( clientState != tcp_is_connected(tcpClient) )
+            {
+                clientState = tcp_is_connected(tcpClient);
+                printf("==> client is %s connected\n", (clientState ? " " : "not"));
+            }
+
+            if ( clientState )                                              // if client is connected
+            {
+                printf("tcp_close() returned %d\n", tcp_close(tcpClient));  // issue a close() from the client end to test active close state machine
+            }
+        }
+
+        if ( whatToDo == SRVR )                                             // when testing TCP server
+        {
+            if ( issueTcpClose == 1 )                                       // if we detected a remote close
+            {
+                printf("tcp_close() returned %d\n", tcp_close(tcpServer));  // close the connection
+                issueTcpClose = 0;                                          // reset the flag
+            }
+        }
+
         if ( whatToDo == PING )
         {
             if ( rxSeq == seq )
             {
                 pingPayload.time = stack_time();
                 seq++;
-                //result = icmp_ping_output(IP4_ADDR(192,168,1,12), ident, seq, (uint8_t* const) &pingPayload, sizeof(struct ping_payload_t));    // output an ICMP Ping packet
-                result = icmp_ping_output(IP4_ADDR(139,130,4,5), ident, seq, (uint8_t* const) &pingPayload, sizeof(struct ping_payload_t));
+                result = icmp_ping_output(IP4_ADDR(192,168,1,12), ident, seq, (uint8_t* const) &pingPayload, sizeof(struct ping_payload_t));    // output an ICMP Ping packet
+                //result = icmp_ping_output(IP4_ADDR(139,130,4,5), ident, seq, (uint8_t* const) &pingPayload, sizeof(struct ping_payload_t));
 
                 switch ( result )
                 {
                     case ERR_OK:                                            // keep sending ping requests
                         break;
 
-                    case ERR_ARP_NONE:                                      // a route to the ping destination was not found, ARP was sent
-                        printf("ARP request sent for Ping target\n");
+                    case ERR_ARP_QUEUE:                                     // ARP sent, packet queued
+                        printf("packet queued.\n");
+                        break;
+
+                    case ERR_ARP_NONE:                                      // a route to the ping destination was not found
+                        printf("cannot resolve destination address, packet dropped.\n retrying...\n");
                         break;
 
                     case ERR_NETIF:
@@ -355,10 +470,12 @@ int main(int argc, char* argv[])
             }
         } /* PING application */
 
+        now = stack_time();
         if ( whatToDo == NTP &&
-             (stack_time() - lastNtpRequest) > NTP_REQUEST_INTERVAL )
+             ( now - lastNtpRequest) > NTP_REQUEST_INTERVAL )
         {
-            lastNtpRequest = stack_time();
+            printf("now = %ld\n", now);
+            lastNtpRequest = now;
             // generate an NTP request
             ntpPayload.flagsMode = NTP_LI_UNKNOWN | NTP_VERSION3 | NTP_MODE_CLIENT;
             ntpPayload.stratum = 0;
@@ -385,11 +502,14 @@ int main(int argc, char* argv[])
             switch ( result )
             {
                 case ERR_OK:                                                // keep sending NTP requests periodically
-                    whatToDo = ARP;                                         // do this only once for testing, but stay in the loop to receive response
                     break;
 
-                case ERR_ARP_NONE:                                          // a route to the NTP server destination or gateway was not found, ARP was sent
-                    printf("ARP request sent for NTP server target\n");
+                case ERR_ARP_QUEUE:                                         // ARP sent, packet queued
+                    printf("packet queued.\n");
+                    break;
+
+                case ERR_ARP_NONE:                                          // a route to the NTP server was not found
+                    printf("cannot resolve destination address, packet dropped.\n retrying...\n");
                     break;
 
                 case ERR_NETIF:

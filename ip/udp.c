@@ -108,7 +108,7 @@ void udp_close(struct udp_pcb_t *pcb)
  *
  *  bind a PCB connection to a local IP address and a port
  *  this function should be called after udp_new() and before using UDP send/receive functions
- *  if port number is '0', the function will bind to first available arbitrary port number
+ *  @@ if port number is '0', the function will bind to first available arbitrary port number
  *
  * param:  pointer to a valid PCB, local IP 'addr' and 'port'
  * return: ERR_OK if no errors or ip4_err_t with error code
@@ -154,6 +154,9 @@ ip4_err_t udp_sendto(struct udp_pcb_t *pcb, uint8_t* const payload, uint16_t pay
     ip4_err_t       result = ERR_OK;
     struct udp_t   *udp;
     struct pbuf_t  *p;
+
+    if ( payloadLen > MAX_DATAGRAM_LEN )                                            // limit on datagram size
+        return ERR_MTU_EXD;
 
     p = pbuf_allocate();
     if ( p != NULL )
@@ -227,7 +230,7 @@ static void udp_input_handler(struct pbuf_t* const p)
     udp = (struct udp_t*)(((uint8_t*) ip) + ipHeaderLen);                               // pointer to the UDP header
 
     addr = ip->destIp;                                                                  // extract destination IP and port
-    port = stack_ntoh(udp->destPort);
+    port = stack_hton(udp->destPort);
 
     for (i = 0; i < UDP_PCB_COUNT; i++)                                                 // scan PCB list
     {

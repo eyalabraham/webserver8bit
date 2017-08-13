@@ -15,8 +15,8 @@ NETWORK=$(IPDIR)/ipv4.c
 
 # transport layer
 TRANSPORT= $(IPDIR)/icmp.c \
-	$(IPDIR)/udp.c
-#	$(IPDIR)/tcp.c
+	$(IPDIR)/udp.c \
+	$(IPDIR)/tcp.c
 
 # application layer
 APPLICATION=$(IPDIR)/ntp.c \

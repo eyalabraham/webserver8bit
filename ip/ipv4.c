@@ -44,8 +44,6 @@ void ip4_input(struct pbuf_t* const p, struct net_interface_t* const netif)
     uint16_t                 chksum, frag;
     int                      ipHeaderLen;
 
-    PRNT_FUNC;
-
     ip = (struct ip_header_t*) &(((struct ethernet_frame_t*)(p->pbuf))->payloadStart); // pointer to IP packet header
 
     /*
@@ -142,6 +140,11 @@ ip4_err_t ip4_output(ip4_addr_t dest, ip4_protocol_t protocol, struct pbuf_t* co
     ipHeader->checksum = 0;                                                     // replace after calculating
     ipHeader->destIp = dest;                                                    // destination IP
 
+    /* @@ if we need to insert options, then the datagram or segment data
+     *    will have to be moved. right now implementation assumes no IPv4 options
+     *    are needed (IHL = 5).
+     */
+
     /* find an interface by scanning the route table for a valid network
      * that connects to 'dest', if no route found drop packet and return error
      */
@@ -211,8 +214,6 @@ static void ip4_icmp_handler(struct pbuf_t* const p, struct net_interface_t* con
     uint16_t             ipHeaderLen;
     uint16_t             payloadLen;
     ip4_err_t            result;
-
-    PRNT_FUNC;
 
     ip_in = (struct ip_header_t*) &(((struct ethernet_frame_t*)(p->pbuf))->payloadStart); // pointer to IP packet header
 

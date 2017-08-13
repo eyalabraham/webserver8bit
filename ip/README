@@ -29,14 +29,14 @@ A rough ASCII sketch of the architecture and associated files:
  | stack.c                  |                               |
  | stack.h                  |                               |
  | options.h                |                               |
- | error.h                  |                               |           [registered receive function per transport]
- | types.h                  +-----------/\--------------\/--+ <----- [ xxx_sendxx() function per transport]
+ | error.h                  |                               |           [ xxx_sendxx() function per transport]
+ | types.h                  +-----------/\--------------\/--+ <----- [receive callback function per transport]
  |                          | Transport                     |
  |                          | ~~~~~~~~~~                    |
  |                          | udp.c  tcp.c  icmp.c          |
  |                          | udp.h  tcp.h  icmp.h          |
  |                          |                               |           ip4_output()
- |                          +-----------/\--------------\/--+ <----- [registered function per transport]
+ |                          +-----------/\--------------\/--+ <----- [callback function per transport, set by the xxx_init() call]
  |                          | Network                       |
  |                          | ~~~~~~~~                      |
  |                          | ipv4.c                        |
@@ -66,7 +66,8 @@ A rough ASCII sketch of the architecture and associated files:
  4. IPv4 Network layer
  5. Transport layer ICMP UDP and TCP
  6. Common stack components
-    File list
+ 7. frame, packet, datagram and segment
+ 8. File list
 
 
  1. ENC28J60 driver
@@ -105,8 +106,15 @@ The ARP module provides two basic functions: it provides address resolution usin
 and it filters ARP replies and IPv4 inputs for processing.
 The ARP module includes a 'Gratuitous ARP' function that can be called at the users discretion.
 When packet output is required the arp_output() function is called from the ipv4 module. The function will
-attept to resolve the destination IP address using the ARP table. If ARP table resolution fails, the ARP module
-will issue an ARP request.
+attempt to resolve the destination IP address using the ARP table. If ARP table resolution fails, the ARP module
+will queue the packet and issue an ARP request. Once the reply to the request is returned the ARP cache table will be 
+consulted again and the packet sent from the queue. Packets queued while waiting for address resolution will
+be discarded if the IP address is not resolved within a preset time out. ARP module uses a timer to check for queue
+timeouts.
+The ARP cache table is maintained per interface and has a limited amount of slots. If the table fills and new
+ARP information needs to be inserted, then the oldest entry will be overwritten.
+The ARP module includes a cache clean-out procedure, that is triggered once every 1min. This process will remove stale
+ARP entries older that 5min
 
  4. IPv4 Network layer
 -----------------------------------------
@@ -154,32 +162,48 @@ Buffer allocation
     buffering, out of which I provisioned 5K byte for receive frames and 3K byte (2 x frame sizes) for transmit buffer.
 
 System time and timer functions
-    @@
+    The stack module provides timer functionality through three function calls: reading system time ticks given in
+    1mili-sec interval stack_time(), set a timer with time-out and callback stack_set_timer(), and a timers management
+    function stack_timers().
+    stack_timers() should be called within a main-loop (similar to LwIP). This function will scan the list of timers
+    will call a predefined callback if the timeout expires. All timers are periodic, that is, once triggered the
+    timer will be reset to be re-triggered after another expiration of the timeout value.
+
+ 7. Frame, packet, datagram and segment
+-----------------------------------------
+
+    [---------------------------------- 1518 ----------------------------------------]  (L1) ENC28J60 device
+    
+       Header                            Data                                   CRC
+    [--- 14 ---|--------------------- MTU = 1500 ----------------------------|-- 4 --]  (L2) Ethernet Frame
+    
+                   Header                     Data
+               [-- 20..60 --|------------ 1440..1480 ------------------------]          (L3) IPv4 Packet
+
+                                Header                    Data
+                            [---- 8 -----|------------ 1432..1472 -----------]          (L4) UDP Datagram
+
+                                Header                    Data
+                            [-- 20..60 --|------------ 1380..1460 -----------]          (L4) TCP Segment
 
 To-Dos
 -----------------------------------------
-1.  [done] Implement Gratuitous ARP
-2.  Error handling
+1.  Error handling
     - remove all assert() and replace with error handling code
     - before forwarding packet to IP layer, check that the dest. IP matches our IP
       if not there is a possible mis-configured ARP table somewhere
-3.  Document
-    - ARP
-    - Timers and system time
-4.  Add functions to inerface_ to set IP addr, Gateway and Subnet Mask
-5.  [done] Code ICMP response
-6.  Code ARP table LRU algorithm to evict slots when the table is full
-7.  [done] figure out what's needed: arp_add_... vs. arp_update_...
-8.  [done] Add if ( != NULL) on function pointers before calling
-9.  A way trace packet drops
-10. IP layer: ICMP (to enable 'ping' application), UDP, and TCP
-11. interface_link_state() should call the link state function through a pointer,
+2.  A way trace packet drops
+3.  IP layer: ICMP (to enable 'ping' application), UDP, and TCP
+4.  interface_link_state() should call the link state function through a pointer,
     the current implementation calls the enc26j60 function directly
-12. add code to interface_link_state() or other function to set link state in the interface
+5.  add code to interface_link_state() or other function to set link state in the interface
     structure and act by calling a registered callback
-13. fragmentation and assembly of IPv4 packets
+6.  fragmentation and assembly of IPv4 packets
+7.  TCP
+    - timer to clear 'stuck' PCBs; e.g. PCB the is in SYN_RECEIVED, send SYN/ACK but never got final ACK. send RST and clear PCB
+    - check TCP checksum when segment is received
       
- File list
+ 8. File list
 -----------------------------------------
 
 README

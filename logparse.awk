@@ -30,7 +30,7 @@ BEGIN           {
                     debugType[3] = "DB_BAD_PARAM"
                     debugType[4] = "DB_TIME_OUT"
                     debugType[5] = "DB_USER"
-                    debugType[6] = "{undefined}"                    # a marker in case I forget to undate the list...
+                    debugType[6] = "{undefined}"                    # a marker in case I forget to update the list...
                     
                     prevClockTics = 0                               # setup variable
                     
