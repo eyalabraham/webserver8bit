@@ -142,7 +142,16 @@ functionality describe in #5.
     linking in the UDP input handler with the ipv4 module packet input handling function.
     
   TCP
-    @@ to be implemented
+    The TCP module is the most basic TCP implementation that closely follows the TCP RFC 793 and its errata.
+    The implementation also include select corrections and features from RFC 1122.
+    First step was to get the TCP state-machine coded. I used the RFC and this resource as a reference
+    <http://www.saminiir.com/lets-code-tcp-ip-stack-1-ethernet-arp/>, next I implemented to receive and then the send
+    functions. The TCP module API is a combination of ideas from LwIP and the socket API formats, and also borrows from
+    the application interface suggested in RFC 793.
+    This TCP protocol does not support:
+    - congestion control mechanisms, and is not a high performance implementation.
+    - 'urgent' data handling
+    - selective acknowledgment mechanism
 
  6. Common stack components
 -----------------------------------------
@@ -193,13 +202,12 @@ To-Dos
     - before forwarding packet to IP layer, check that the dest. IP matches our IP
       if not there is a possible mis-configured ARP table somewhere
 2.  A way trace packet drops
-3.  IP layer: ICMP (to enable 'ping' application), UDP, and TCP
-4.  interface_link_state() should call the link state function through a pointer,
+3.  interface_link_state() should call the link state function through a pointer,
     the current implementation calls the enc26j60 function directly
-5.  add code to interface_link_state() or other function to set link state in the interface
+4.  add code to interface_link_state() or other function to set link state in the interface
     structure and act by calling a registered callback
-6.  fragmentation and assembly of IPv4 packets
-7.  TCP
+5.  fragmentation and assembly of IPv4 packets
+6.  TCP
     - timer to clear 'stuck' PCBs; e.g. PCB the is in SYN_RECEIVED, send SYN/ACK but never got final ACK. send RST and clear PCB
     - check TCP checksum when segment is received
       
