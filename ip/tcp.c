@@ -34,13 +34,14 @@
 /* -----------------------------------------
    module macros and types
 ----------------------------------------- */
-#define     send_syn(p)         send_segment(p, TCP_FLAG_SYN, NULL, 0)
-#define     send_syn_ack(p)     send_segment(p, (TCP_FLAG_SYN+TCP_FLAG_ACK), NULL, 0)
-#define     send_ack(p)         send_segment(p, TCP_FLAG_ACK, NULL, 0)
-#define     send_data_segment()
-#define     send_fin(p)         send_segment(p, TCP_FLAG_FIN, NULL, 0)
-#define     send_fin_ack(p)     send_segment(p, (TCP_FLAG_FIN+TCP_FLAG_ACK), NULL, 0)
-#define     send_rst(p)         send_segment(p, TCP_FLAG_RST, NULL, 0)
+#define     CIRC_BUFFER_MASK    ((uint16_t)TCP_DATA_BUF_SIZE -1)
+
+#define     send_syn(p)         send_segment(p, TCP_FLAG_SYN)
+#define     send_syn_ack(p)     send_segment(p, (TCP_FLAG_SYN+TCP_FLAG_ACK))
+#define     send_ack(p)         send_segment(p, TCP_FLAG_ACK)
+#define     send_fin(p)         send_segment(p, TCP_FLAG_FIN)
+#define     send_fin_ack(p)     send_segment(p, (TCP_FLAG_FIN+TCP_FLAG_ACK))
+#define     send_rst(p)         send_segment(p, TCP_FLAG_RST)
 
 #define     set_state(p,s)      {                                                                           \
                                     printf(" connection %d, state change %d -> %d\n",p,tcpPCB[p].state,s);  \
@@ -79,7 +80,6 @@ struct opt_t                    // structure to ease options setup when SYN flag
 #define         OPT_BYTES       sizeof(struct opt_t)            // in uint8_t
 #define         OPT_LEN         ((OPT_BYTES / 4)+5)             // in uint32_t
 
-
 struct pseudo_header_t
 {
     ip4_addr_t  srcIp;
@@ -92,14 +92,16 @@ struct pseudo_header_t
 /* -----------------------------------------
    module globals
 ----------------------------------------- */
-struct tcp_pcb_t        tcpPCB[TCP_PCB_COUNT];              // UDP protocol control blocks
+struct tcp_pcb_t    tcpPCB[TCP_PCB_COUNT];                      // TCP protocol control blocks
+uint8_t             sendBuff[TCP_PCB_COUNT][TCP_DATA_BUF_SIZE]; // set of transmit buffers, one per PCB
+uint8_t             recvBuff[TCP_PCB_COUNT][TCP_DATA_BUF_SIZE]; // set of receive buffers, one per PCB
 
 /* -----------------------------------------
    static functions
 ----------------------------------------- */
 static void      tcp_input_handler(struct pbuf_t* const);
 static pcbid_t   find_pcb(pcb_state_t, ip4_addr_t, uint16_t, ip4_addr_t, uint16_t);
-static ip4_err_t send_segment(pcbid_t, uint16_t, uint8_t*, uint16_t);
+static ip4_err_t send_segment(pcbid_t, uint16_t);
 static void      get_tcp_opt(uint8_t, uint8_t*, struct tcp_opt_t*);
 static uint32_t  pseudo_header_sum(pcbid_t, uint16_t);
 static void      tcp_timeout_handler(uint32_t);
@@ -120,12 +122,14 @@ void tcp_init(void)
 
     for (i = 0; i < TCP_PCB_COUNT; i++)                     // initialize PCB list
     {
-        memset(&(tcpPCB[i]), 0, sizeof(struct tcp_pcb_t));
+        memset(&(tcpPCB[i]), 0, sizeof(struct tcp_pcb_t));  // clear variable and set state
         tcpPCB[i].state = FREE;
-        // TODO allocate send and receive buffers and reset pointers
+
+        tcpPCB[i].send = &(sendBuff[i][0]);                 // link to send and receive buffers
+        tcpPCB[i].recv = &(recvBuff[i][0]);
     }
 
-    stack_set_protocol_handler(IP4_TCP, tcp_input_handler); // setup the stack handler for incoming UDP packets
+    stack_set_protocol_handler(IP4_TCP, tcp_input_handler); // setup the stack handler for incoming TCP segments
     stack_set_timer(250, tcp_timeout_handler);              // timeout handler runs every 250mSec
 }
 
@@ -415,7 +419,109 @@ int tcp_is_connected(pcbid_t pcbId)
 }
 
 /*------------------------------------------------
- * tcp_is_connected()
+ * tcp_send()
+ *
+ *  send data from a buffer, returns byte count actually sent
+ *  create this function instead of a callback method upon connection
+ *
+ * param:  valid PCB ID, application/user source buffer, byte count to send,
+ *         flags: 0 or TCP_FLAG_PSH or TCP_FLAG_URG (TCP_FLAG_URG not implemented)
+ * return: byte count actually sent, or ip4_err_t error code 
+ *
+ */
+int tcp_send(pcbid_t pcbId, uint8_t* const data, uint16_t count, uint16_t flags)
+{
+    return 0;
+}
+
+/*------------------------------------------------
+ * tcp_recv()
+ *
+ *  received data, returns byte counts read into application/user buffer
+ *  create this function instead of a callback method upon connection
+ *
+ * param:  valid PCB ID, application/user receive buffer, byte count available in receive buffer
+ * return: byte counts read into application/user buffer, or ip4_err_t error code 
+ *
+ */
+int tcp_recv(pcbid_t pcbId, uint8_t* const data, uint16_t count)
+{
+    int     result = 0;
+    int     bytes, i;
+
+    if ( count == 0 || data == NULL )
+        return 0;
+    
+    if ( pcbId >= TCP_PCB_COUNT )
+        return ERR_PCB_ALLOC;
+
+    switch ( tcpPCB[pcbId].state )
+    {
+        case FREE:
+        case BOUND:
+            result = ERR_TCP_CLOSED;
+            break;
+
+        /* TODO: Queue for processing after entering ESTABLISHED state.
+         * If there is no room to queue this request, respond with
+         *  "error: insufficient resources".
+         */
+        case LISTEN:
+        case SYN_RECEIVED:
+        case SYN_SENT:
+            result = ERR_MEM;
+            break;
+            
+        /* Since the remote side has already sent FIN, RECEIVEs must be
+         * satisfied by text already on hand, but not yet delivered to the
+         * user.  If no text is awaiting delivery, the RECEIVE will get a
+         * "error:  connection closing" response.  Otherwise, any remaining
+         * text can be used to satisfy the RECEIVE.
+         *
+         * TODO: If RCV.UP is in advance of the data currently being passed to the
+         * user notify the user of the presence of urgent data.
+         */
+        case CLOSE_WAIT:
+            if ( tcpPCB[pcbId].recvCnt == 0 )                                           // if no data, none will be received any more
+            {
+                result = ERR_TCP_CLOSING;                                               // signal the connection is closing
+            }                                                                           // otherwise fall through to transfer the data to the application
+            /* no break */
+
+        case ESTABLISHED:
+        case FIN_WAIT1:
+        case FIN_WAIT2:
+            if ( (bytes = tcpPCB[pcbId].recvCnt) > 0 )                                  // determine if any data is available for the application
+            {
+                if (bytes > count)                                                      // adjust count to lower number
+                    bytes = count;
+
+                for ( i = 0; i < bytes; i++ )                                           // byte copy loop
+                {
+                    data[i] = tcpPCB[pcbId].recv[tcpPCB[pcbId].recvRDp];                // copy a byte
+                    tcpPCB[pcbId].recvCnt--;                                            // decrement count
+                    tcpPCB[pcbId].recvRDp++;                                            // adjust buffer read pointer
+                    tcpPCB[pcbId].recvRDp &= CIRC_BUFFER_MASK;                          // quick way to make pointer circular
+                }
+                tcpPCB[pcbId].RCV_WND += bytes;                                         // adjust windows size to space in buffer
+                result = bytes;                                                         // return number of bytes copied
+            }
+            break;
+
+        case CLOSING:
+        case LAST_ACK:
+        case TIME_WAIT:
+            result = ERR_TCP_CLOSING;
+            break;
+            
+        default:;
+    }
+    
+    return result;
+}
+
+/*------------------------------------------------
+ * tcp_remote_addr()
  *
  *  get remote address of a connection
  *
@@ -433,7 +539,7 @@ ip4_addr_t tcp_remote_addr(pcbid_t pcbId)
 
 
 /*------------------------------------------------
- * tcp_is_connected()
+ * tcp_remote_port()
  *
  *  get remote port of a connection
  *
@@ -466,11 +572,13 @@ static void tcp_input_handler(struct pbuf_t* const p)
 {
     struct ip_header_t *ip;
     struct tcp_t       *tcp;
+    uint8_t            *dp;
     ip4_addr_t          addrLocal, addrRemote;
     uint16_t            portLocal, portRemote;
     uint16_t            flags;
     uint16_t            dataOff;
     pcbid_t             pcbId, newConnPcb;
+    int                 bytes, i;
     ip4_err_t           result;
 
     PRNT_FUNC;
@@ -518,7 +626,8 @@ static void tcp_input_handler(struct pbuf_t* const p)
 
     tcpPCB[pcbId].SEG_SEQ = stack_ntohl(tcp->seq);
     tcpPCB[pcbId].SEG_ACK = stack_ntohl(tcp->ack);
-    tcpPCB[pcbId].SEG_LEN = p->len - ((ip->verHeaderLength & 0x0f) * 4) - dataOff;          // number of bytes occupied by the data in the segment
+    tcpPCB[pcbId].SEG_LEN = p->len - FRAME_HDR_LEN - ((ip->verHeaderLength & 0x0f) * 4) - dataOff;  // number of bytes occupied by the data in the segment
+    //printf("tcpPCB[pcbId].SEG_LEN = %d\n", tcpPCB[pcbId].SEG_LEN);
     tcpPCB[pcbId].SEG_WND = stack_ntoh(tcp->window);
     tcpPCB[pcbId].SEG_UP  = stack_ntoh(tcp->urgentPtr);
 
@@ -557,7 +666,10 @@ static void tcp_input_handler(struct pbuf_t* const p)
             newConnPcb = tcp_new();                                                         // allocate connection PCB
             if ( newConnPcb < ERR_OK )                                                      // drop the connection request if no PCB resources
                 return;
-            memcpy(&(tcpPCB[newConnPcb]), &(tcpPCB[pcbId]), sizeof(struct tcp_pcb_t));      // duplicate the LISTENing PCB to the new active connection
+            tcpPCB[newConnPcb].state = LISTEN;                                              // duplicate the LISTENing PCB to the new active connection
+            tcpPCB[newConnPcb].timeInState = tcpPCB[pcbId].timeInState;
+            tcpPCB[newConnPcb].localIP = tcpPCB[pcbId].localIP;
+            tcpPCB[newConnPcb].localPort = tcpPCB[pcbId].localPort;
             tcpPCB[newConnPcb].remoteIP = addrRemote;
             tcpPCB[newConnPcb].remotePort = portRemote;
             tcpPCB[newConnPcb].RCV_NXT = tcpPCB[pcbId].SEG_SEQ + 1;
@@ -567,6 +679,9 @@ static void tcp_input_handler(struct pbuf_t* const p)
             tcpPCB[newConnPcb].SND_UNA = tcpPCB[newConnPcb].ISS;
             tcpPCB[newConnPcb].SND_NXT = tcpPCB[newConnPcb].ISS;
             tcpPCB[newConnPcb].SND_opt.mss = MSS;
+            memcpy(&(tcpPCB[newConnPcb].RCV_opt), &(tcpPCB[pcbId].RCV_opt), sizeof(struct tcp_opt_t));
+            tcpPCB[newConnPcb].tcp_accept_fn = tcpPCB[pcbId].tcp_accept_fn;
+            tcpPCB[newConnPcb].tcp_notify_fn = tcpPCB[pcbId].tcp_notify_fn;
             result = send_syn_ack(newConnPcb);                                              // send <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
             if ( result == ERR_OK ||
                  result == ERR_ARP_QUEUE )
@@ -732,6 +847,8 @@ static void tcp_input_handler(struct pbuf_t* const p)
         if ( flags & TCP_FLAG_SYN )
         {
             send_rst(pcbId);
+            send_sig(pcbId,TCP_EVENT_REMOTE_RST);
+            free_tcp_pcb(pcbId);
             return;
         }
 
@@ -868,7 +985,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
             assert(1);
         }
 
-        /* TODO seventh, process the segment text,
+        /* seventh, process the segment text,
          * ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2
          *   Once in the ESTABLISHED state, it is possible to deliver segment
          *   text to user RECEIVE buffers.  Text from segments can be moved
@@ -892,17 +1009,38 @@ static void tcp_input_handler(struct pbuf_t* const p)
          *
          *   This acknowledgment should be piggybacked on a segment being
          *   transmitted if possible without incurring undue delay.
-         * CLOSE-WAIT, CLOSING, LAST-ACK, IME-WAIT STATE
-         *   This should not occur, since a FIN has been received from the
-         *   remote side.  Ignore the segment text.
          */
         switch ( tcpPCB[pcbId].state )
         {
             case ESTABLISHED:
             case FIN_WAIT1:
             case FIN_WAIT2:
+                if ( tcpPCB[pcbId].SEG_LEN > 0 &&
+                     (bytes = TCP_DATA_BUF_SIZE - tcpPCB[pcbId].recvCnt) > 0 )              // determine space available for data
+                {
+                    dp = (uint8_t *)(((uint8_t *)tcp) +  dataOff);                          // pointer to segment's data (text)
+                        
+                    if ( bytes > tcpPCB[pcbId].SEG_LEN )                                    // adjust count to lower number
+                        bytes = tcpPCB[pcbId].SEG_LEN;
+
+                    for ( i = 0; i < bytes; i++ )                                           // byte copy loop
+                    {
+                        tcpPCB[pcbId].recv[tcpPCB[pcbId].recvWRp] = dp[i];                  // copy a byte
+                        tcpPCB[pcbId].recvCnt++;
+                        tcpPCB[pcbId].recvWRp++;                                            // adjust buffer read pointer
+                        tcpPCB[pcbId].recvWRp &= CIRC_BUFFER_MASK;                          // quick way to make pointer circular
+                    }
+                    
+                    tcpPCB[pcbId].RCV_NXT += bytes;                                         // adjust next ACK parameter
+                    tcpPCB[pcbId].RCV_WND -= bytes;                                         // adjust windows size to space in buffer
+                    send_ack(pcbId);
+                }
                 break;
 
+            /* CLOSE-WAIT, CLOSING, LAST-ACK, TIME-WAIT STATE
+             *   This should not occur, since a FIN has been received from the
+             *   remote side.  Ignore the segment text.
+             */
             default:;
         }
 
@@ -1031,11 +1169,11 @@ static pcbid_t find_pcb(pcb_state_t state, ip4_addr_t localIP, uint16_t localPor
  *
  *  this function send a TCP segment and flags.
  *
- * param:  PCB ID to use for transmit, segment flags, pointer to data and byte count to send
+ * param:  PCB ID to use for transmit, segment flags
  * return: ERR_OK if no errors or ip4_err_t with error code
  *
  */
-static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags, uint8_t *data, uint16_t payloadLen)
+static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
 {
     ip4_err_t           result = ERR_OK;
     uint16_t            checksumTemp = 0;
@@ -1047,9 +1185,6 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags, uint8_t *data, uint
     struct opt_t       *opt;
 
     PRNT_FUNC;
-
-    if ( payloadLen > MAX_SEGMENT_LEN )                                                 // limit on segment size
-        return ERR_MTU_EXD;
 
     p = pbuf_allocate();                                                                // allocate a transmit buffer
     if ( p == NULL )                                                                    // exit here is error
@@ -1117,13 +1252,17 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags, uint8_t *data, uint
         opt->tsTime = stack_htonl(tcpPCB[pcbId].SND_opt.time);
         opt->tsEcho = stack_htonl(tcpPCB[pcbId].RCV_opt.time);
         opt->endOfOpt = 0;                                                              // padding
+        
+        /* TODO: if PCB is in ESTABLISHED state
+                 then  send data in the outgoing segment
+         */
+        sendCount = 0;
 
         pseudoHdrSum = pseudo_header_sum(pcbId, TCP_HDR_LEN + OPT_BYTES);               // calculate pseudo-header checksum
         checksumTemp = stack_checksumEx(tcp, TCP_HDR_LEN + OPT_BYTES, pseudoHdrSum);
         tcp->checksum = ~checksumTemp;
 
         p->len = FRAME_HDR_LEN + IP_HDR_LEN + TCP_HDR_LEN + OPT_BYTES;                  // set packet length
-        sendCount = payloadLen;                                                         // bytes sent
         if ( flags & TCP_FLAG_FIN )                                                     // optional count of FIN signal
             sendCount++;
     }
@@ -1300,5 +1439,17 @@ static void free_tcp_pcb(pcbid_t pcbId)
         return;
 
     // TODO clear all resources associated with this PCB
+    tcpPCB[pcbId].localIP = 0;
+    tcpPCB[pcbId].localPort = 0;
+    tcpPCB[pcbId].remoteIP = 0;
+    tcpPCB[pcbId].remotePort = 0;
+    
+    tcpPCB[pcbId].sendWRp = 0;
+    tcpPCB[pcbId].sendRDp = 0;
+    tcpPCB[pcbId].sendCnt = 0;
+    tcpPCB[pcbId].recvWRp = 0;
+    tcpPCB[pcbId].recvRDp = 0;
+    tcpPCB[pcbId].recvCnt = 0;
+
     set_state(pcbId,FREE);                                                  // close the connection
 }

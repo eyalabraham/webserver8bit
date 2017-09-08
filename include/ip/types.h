@@ -263,12 +263,10 @@ typedef enum                                                    // enumeration o
 {
     TCP_EVENT_CLOSE,                                            // the remote side closed the TCP connection
     TCP_EVENT_REMOTE_RST,                                       // remote side reset the connection
-    TCP_EVENT_URGENT                                            // urgent data segment arrived
+    TCP_EVENT_DATA_RECV,                                        // data received notification
+    TCP_EVENT_PUSH,                                             // push flag was set for received data in buffer
+    TCP_EVENT_URGENT                                            // urgent data segment arrived (not implemented)
 }tcp_event_t;
-
-typedef void (*tcp_recv_callback)(struct pbuf_t* const,         // TCP data receive callback function
-                                  const ip4_addr_t,             // passes pointer to pbuf, source IP
-                                  const uint16_t);              // and source port
 
 typedef void (*tcp_accept_callback)(pcbid_t);                   // TCP server accept connection callback function
 typedef void (*tcp_notify_callback)(pcbid_t, tcp_event_t);      // event notification via callback function
@@ -317,10 +315,20 @@ struct tcp_pcb_t
     uint32_t            IRS;                                    // initial receive sequence number
     struct tcp_opt_t    RCV_opt;                                // TCP options
 
+    /* send and receive buffers
+     */
+    uint8_t            *send;                                   // pointer to circular send buffer
+    uint16_t            sendWRp;                                // write index to circular buffer
+    uint16_t            sendRDp;                                // read index from circular buffer
+    int                 sendCnt;                                // bytes available in buffer
+    uint8_t            *recv;                                   // pointer to circular receive buffer
+    uint16_t            recvWRp;
+    uint16_t            recvRDp;
+    int                 recvCnt;
+
     /* call back functions for notification
      * functionality
      */
-    tcp_recv_callback   tcp_receive ;                           // TCP data receiver callback handler
     tcp_accept_callback tcp_accept_fn;                          // client connection requests handler on a server PCB
     tcp_notify_callback tcp_notify_fn;                          // optional event notification callback pointer
 };

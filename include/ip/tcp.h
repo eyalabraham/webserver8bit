@@ -44,11 +44,13 @@ int               tcp_is_connected(pcbid_t);            // to poll if a tcp_conn
 
 /* send and receive functions
  */
-ip4_err_t         tcp_send(pcbid_t,                     // send a segment of data from a buffer
-                           uint8_t* const,
-                           uint16_t);
-ip4_err_t         tcp_recv(pcbid_t,                     // registers a callback to handle received data
-                           tcp_recv_callback);
+int               tcp_send(pcbid_t,                     // send data from a buffer, returns byte count actually sent
+                           uint8_t* const,              // application/user source buffer
+                           uint16_t,                    // byte count to send
+                           uint16_t);                   // flags: 0 or TCP_FLAG_PSH or TCP_FLAG_URG (TCP_FLAG_URG not implemented)
+int               tcp_recv(pcbid_t,                     // received data, returns byte counts read into application/user buffer
+                           uint8_t* const,              // application/user receive buffer
+                           uint16_t);                   // byte count available in receive buffer
 
 /* connection utilities
  */

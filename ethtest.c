@@ -65,9 +65,11 @@ enum {ARP, PING, NTP, SRVR, CLNT} whatToDo;
 #define     NTP_MODE_CTRL           0x06
 #define     NTP_MODE_PRIV           0x07
 
-#define DIFF_SEC_1900_1970         (2208988800UL)   // number of seconds between 1900 and 1970 (MSB=1)
-#define DIFF_SEC_1970_2036         (2085978496UL)   // number of seconds between 1970 and Feb 7, 2036 (6:28:16 UTC) (MSB=0)
+#define     DIFF_SEC_1900_1970      (2208988800UL)  // number of seconds between 1900 and 1970 (MSB=1)
+#define     DIFF_SEC_1970_2036      (2085978496UL)  // number of seconds between 1970 and Feb 7, 2036 (6:28:16 UTC) (MSB=0)
 
+// TCP
+#define     RECV_BUFF_SIZE          128
 
 /* -----------------------------------------
    types and data structures
@@ -124,7 +126,8 @@ struct ntp_t
 uint16_t        rxSeq;
 int             issueTcpClose = 0, clientState = -1;
 char            ip[17];
-pcbid_t         tcpListner, tcpServer, tcpClient;
+pcbid_t         tcpListner = -1, tcpServer = -1, tcpClient = -1;
+uint8_t         data[RECV_BUFF_SIZE];
 
 /*------------------------------------------------
  * ping_input()
@@ -217,6 +220,10 @@ void notify_callback(pcbid_t connection, tcp_event_t reason)
             printf("connection reset by");
             break;
 
+        case TCP_EVENT_DATA_RECV:
+            printf("data available from");
+            break;
+
         default:
             printf("unknown event %d from", reason);
     }
@@ -253,6 +260,7 @@ void accept_callback(pcbid_t connection)
 int main(int argc, char* argv[])
 {
     int                     linkState, i, done = 0, j = 0;
+    int                     recvResult, recvErr = 0;
     uint16_t                ident, seq;
     ip4_err_t               result;
     struct net_interface_t *netif;
@@ -336,14 +344,14 @@ int main(int argc, char* argv[])
         {
             whatToDo = SRVR;
             /* prepare a TCP serve
-             * listening to connections on port 7 ECHO
+             * listening to connections on port 60001
              *
              */
             tcp_init();                                                         // initialize TCP
-            tcpListner = tcp_new();                                             // get a TCP
+            tcpListner = tcp_new();                                             // get a TCP.
             printf("tcp_new() -> %d\n", tcpListner);
             assert(tcpListner >= 0);                                            // make sure it is valid
-            assert(tcp_bind(tcpListner,IP4_ADDR(192,168,1,19),7) == ERR_OK);    // bind on port 7
+            assert(tcp_bind(tcpListner,IP4_ADDR(192,168,1,19),60001) == ERR_OK);// bind on port 60001
             assert(tcp_listen(tcpListner) == ERR_OK);                           // listen to bound IP/port
             assert(tcp_notify(tcpListner, notify_callback) == ERR_OK);          // notify on remote connection close
             assert(tcp_accept(tcpListner, accept_callback) == ERR_OK);          // connection acceptance callback
@@ -352,7 +360,7 @@ int main(int argc, char* argv[])
         {
             whatToDo = CLNT;
             /* prepare a TCP client
-             * to connect from port 60001 ECHO
+             * to connect from port 60001
              *
              */
             tcp_init();                                                         // initialize TCP
@@ -416,9 +424,29 @@ int main(int argc, char* argv[])
             }
         }
 
-        if ( whatToDo == SRVR )                                             // when testing TCP server
+        if ( whatToDo == SRVR &&                                            // when testing TCP server
+             tcpServer >= 0 )                                               // and a connection was accepted
         {
-            if ( issueTcpClose == 1 )                                       // if we detected a remote close
+            recvResult = tcp_recv(tcpServer, data, RECV_BUFF_SIZE);         // try to read the receive buffer
+
+            if ( recvResult < 0 &&                                          // negative results are errors
+                 recvResult != recvErr )                                    // prevent re-printing of same error
+            {
+                printf("tcp_recv() error code %d\n", recvResult);
+                recvErr = recvResult;
+            }
+            else if ( recvResult > 0 )                                      // positive results larger than 0
+            {
+                printf("tcp_recv() [");
+                for ( i = 0; i < recvResult; i++ )                          // are character data sent by the remote client
+                {
+                    printf("%c", data[i]);                                  // assume these are all printable characters
+                }
+                printf("]\n");
+            }
+            
+            if ( issueTcpClose == 1 &&                                      // if we detected a remote close
+                 recvResult <= 0 )                                          // and no more data to read
             {
                 printf("tcp_close() returned %d\n", tcp_close(tcpServer));  // close the connection
                 issueTcpClose = 0;                                          // reset the flag

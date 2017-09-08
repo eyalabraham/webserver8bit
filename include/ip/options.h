@@ -89,9 +89,8 @@
 #define     TCP_CONN_PER_SRVR   2           // max incoming connections per server
 #define     TCP_CLIENT_COUNT    2           // max outgoing client connections
 #define     TCP_PCB_COUNT       (TCP_CLIENT_COUNT+TCP_SERVER_COUNT*(1+TCP_CONN_PER_SRVR))
-#define     TCP_DATA_BUFFERS    (TCP_CLIENT_COUNT+TCP_CONN_PER_SRVR)
-#define     TCP_DATA_BUF_SIZE   1024        // bytes
-#define     TCP_DEF_WINDOW      TCP_DATA_BUF_SIZE/4 // bytes
+#define     TCP_DATA_BUF_SIZE   512         // in bytes, max 32,768 bytes in powers of 2: 2, 4, 8, 16, 32, ...
+#define     TCP_DEF_WINDOW      TCP_DATA_BUF_SIZE   // bytes
 
 #define     TCP_MSL_TIMEOUT     120000      // Maximum Segment Lifetime (in RFC-793 = 2 minutes)
 #define     TCP_HSTATE_TIMEOUT  300000      // time out to exit a half open or half closed state
