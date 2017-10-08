@@ -85,6 +85,9 @@
 #define     DEF_MSS             536         // default if not received from peer (RFC 1122 4.2.2.6  Maximum Segment Size Option: RFC-793 Section 3.1)
 #define     MSS                 MAX_SEGMENT_LEN
 
+#define     DEF_RTT             1000        // 1[sec] RFC 6298 section 2.1
+#define     TCP_MAX_RETRAN      10          // maximum number of TCP segment retransmits before reset and connection abort
+
 #define     TCP_SERVER_COUNT    1           // number of listening servers
 #define     TCP_CONN_PER_SRVR   2           // max incoming connections per server
 #define     TCP_CLIENT_COUNT    2           // max outgoing client connections

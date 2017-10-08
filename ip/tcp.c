@@ -39,7 +39,6 @@
 #define     send_syn(p)         send_segment(p, TCP_FLAG_SYN)
 #define     send_syn_ack(p)     send_segment(p, (TCP_FLAG_SYN+TCP_FLAG_ACK))
 #define     send_ack(p)         send_segment(p, TCP_FLAG_ACK)
-#define     send_fin(p)         send_segment(p, TCP_FLAG_FIN)
 #define     send_fin_ack(p)     send_segment(p, (TCP_FLAG_FIN+TCP_FLAG_ACK))
 #define     send_rst(p)         send_segment(p, TCP_FLAG_RST)
 
@@ -381,12 +380,14 @@ ip4_err_t tcp_connect(pcbid_t pcbId, ip4_addr_t serverIP, uint16_t serverPort)
     tcpPCB[pcbId].SND_NXT = tcpPCB[pcbId].ISS;              // NXT will be updated by send_syn() if it is successful
     tcpPCB[pcbId].SND_opt.mss = MSS;
 
-    tcpPCB[pcbId].SND_WND = 0;
+    tcpPCB[pcbId].SND_WND = TCP_DEF_WINDOW;
     tcpPCB[pcbId].SND_UP = 0;
     tcpPCB[pcbId].SND_WL1 = 0;
     tcpPCB[pcbId].SND_WL2 = 0;
 
     tcpPCB[pcbId].RCV_WND = TCP_DEF_WINDOW;
+
+    tcpPCB[pcbId].RT0 = DEF_RTT;
 
     result = send_syn(pcbId);                               // send SYN segment to server
 
@@ -431,7 +432,73 @@ int tcp_is_connected(pcbid_t pcbId)
  */
 int tcp_send(pcbid_t pcbId, uint8_t* const data, uint16_t count, uint16_t flags)
 {
-    return 0;
+    int     result = 0;
+    int     bytes, i;
+
+    if ( count == 0 || data == NULL )
+        return 0;
+
+    if ( pcbId >= TCP_PCB_COUNT )
+        return ERR_PCB_ALLOC;
+
+    flags &= TCP_FLAG_PSH;                                                              // only support the PUSH flag if any supplied
+
+    switch ( tcpPCB[pcbId].state )
+    {
+    case FREE:
+    case BOUND:
+    case LISTEN:
+        result = ERR_TCP_CLOSED;
+        break;
+
+    /* TODO: Queue the data for transmission after entering ESTABLISHED state.
+       If no space to queue, respond with "error: insufficient resources".
+     */
+    case SYN_RECEIVED:
+    case SYN_SENT:
+        result = ERR_MEM;
+        break;
+
+    /* Segmentize the buffer and send it with a piggybacked
+     * acknowledgment (acknowledgment value = RCV.NXT).  If there is
+     * insufficient space to remember this buffer, simply return "error:
+     * insufficient resources".
+     * TODO: If the urgent flag is set, then SND.UP <- SND.NXT-1 and set the
+     * urgent pointer in the outgoing segments.
+     */
+    case CLOSE_WAIT:
+    case ESTABLISHED:
+        if ( (bytes = (TCP_DATA_BUF_SIZE - tcpPCB[pcbId].sendCnt)) > 0 )                // determine if space is available in send buffer
+        {
+            if (bytes > count)                                                          // adjust count to lower number
+                bytes = count;
+
+            for ( i = 0; i < bytes; i++ )                                               // byte copy loop
+            {
+                tcpPCB[pcbId].send[tcpPCB[pcbId].sendWRp] = data[i];                    // copy a byte
+                tcpPCB[pcbId].sendCnt++;                                                // increment total byte count
+                tcpPCB[pcbId].sendWRp++;                                                // adjust buffer write pointer
+                tcpPCB[pcbId].sendWRp &= CIRC_BUFFER_MASK;                              // quick way to make pointer circular
+            }
+            result = bytes;                                                             // return number of bytes copied
+            send_segment(pcbId, flags + TCP_FLAG_ACK);                                  // send data in a segment with specified flags
+        }
+        else
+            result = ERR_MEM;
+        break;
+
+    case FIN_WAIT1:
+    case FIN_WAIT2:
+    case CLOSING:
+    case LAST_ACK:
+    case TIME_WAIT:
+        result = ERR_TCP_CLOSING;
+        break;
+
+    default:;
+    }
+
+    return result;
 }
 
 /*------------------------------------------------
@@ -631,12 +698,14 @@ static void tcp_input_handler(struct pbuf_t* const p)
     tcpPCB[pcbId].SEG_WND = stack_ntoh(tcp->window);
     tcpPCB[pcbId].SEG_UP  = stack_ntoh(tcp->urgentPtr);
 
+/*
     if ( tcpPCB[pcbId].SEG_WND != tcpPCB[pcbId].SND_WND )                                   // check for window update
     {
         tcpPCB[pcbId].SND_WND = tcpPCB[pcbId].SEG_WND;                                      // update window size
         tcpPCB[pcbId].SND_WL1 = tcpPCB[pcbId].SEG_SEQ;
         tcpPCB[pcbId].SND_WL2 = tcpPCB[pcbId].SEG_ACK;
     }
+*/
 
     if ( dataOff > 20 )                                                                     // get TCP options
     {
@@ -678,6 +747,8 @@ static void tcp_input_handler(struct pbuf_t* const p)
             tcpPCB[newConnPcb].ISS = stack_time();
             tcpPCB[newConnPcb].SND_UNA = tcpPCB[newConnPcb].ISS;
             tcpPCB[newConnPcb].SND_NXT = tcpPCB[newConnPcb].ISS;
+            tcpPCB[newConnPcb].SND_WND = TCP_DEF_WINDOW;
+            tcpPCB[newConnPcb].RT0 = DEF_RTT;
             tcpPCB[newConnPcb].SND_opt.mss = MSS;
             memcpy(&(tcpPCB[newConnPcb].RCV_opt), &(tcpPCB[pcbId].RCV_opt), sizeof(struct tcp_opt_t));
             tcpPCB[newConnPcb].tcp_accept_fn = tcpPCB[pcbId].tcp_accept_fn;
@@ -704,7 +775,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
              * TODO Errata ID: 3300
              * if SND.UNA =< SEG.ACK =< SND.NXT then the ACK is acceptable.
              */
-            if ( tcpPCB[pcbId].SEG_ACK <= tcpPCB[pcbId].ISS ||                              // out of order, bad, ACK number
+            if ( tcpPCB[pcbId].SEG_ACK <= tcpPCB[pcbId].ISS ||                              // out of order, bad ACK number
                  tcpPCB[pcbId].SEG_ACK > tcpPCB[pcbId].SND_NXT )
             {
                 if ( flags & TCP_FLAG_RST )
@@ -717,11 +788,32 @@ static void tcp_input_handler(struct pbuf_t* const p)
             }
 
             if ( tcpPCB[pcbId].SEG_ACK < tcpPCB[pcbId].SND_UNA ||                           // is ACK acceptable number range?
-                    tcpPCB[pcbId].SEG_ACK > tcpPCB[pcbId].SND_NXT )
+                 tcpPCB[pcbId].SEG_ACK > tcpPCB[pcbId].SND_NXT )
             {
                 send_rst(pcbId);                                                            // TODO send reset? <SEQ=SEG.ACK><CTL=RST>
                 return;
             }
+        }
+
+        /* at this point the ACK is good
+         * so we need to check matching ACK to sent SYN and if ok
+         * clear the queued SYN packed we have sent
+         */
+/*
+        printf("sendTime=%lu RCV_opt.echoTime=%lu\n",
+                tcpPCB[pcbId].sendTime,
+                tcpPCB[pcbId].RCV_opt.echoTime);
+*/
+        if ( tcpPCB[pcbId].sendTime == tcpPCB[pcbId].RCV_opt.echoTime )                     // if the send time matches the echo time stamp of queued packet
+        {                                                                                   // then this Ack is for the queued packet
+            pbuf_free(tcpPCB[pcbId].pbufQ);                                                 // free the pbuf and
+            tcpPCB[pcbId].sendTime = 0L;                                                    // removed queued segment from retransmit queue
+            tcpPCB[pcbId].resendTime = 0L;
+            tcpPCB[pcbId].retranCnt = 0;
+            tcpPCB[pcbId].pbufQ = NULL;
+
+            /* TODO calculate RTT here
+             */
         }
 
         /* if the RST bit is set then signal the user "error:
@@ -771,8 +863,10 @@ static void tcp_input_handler(struct pbuf_t* const p)
             if ( tcpPCB[pcbId].SND_UNA > tcpPCB[pcbId].ISS )
             {
                 send_ack(pcbId);
+/*
                 if ( tcpPCB[pcbId].tcp_accept_fn != NULL )                                  // guard, but should never be NULL
                     tcpPCB[pcbId].tcp_accept_fn(pcbId);                                     // call the listner's accept callback
+*/
                 set_state(pcbId,ESTABLISHED);
             }
             else
@@ -892,7 +986,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
             case LAST_ACK:
             case TIME_WAIT:
                 /* If SND.UNA < SEG.ACK =< SND.NXT then, set SND.UNA <- SEG.ACK.
-                 * TODO Any segments on the retransmission queue which are thereby
+                 * Any segments on the retransmission queue which are thereby
                  * entirely acknowledged are removed.  Users should receive
                  * positive acknowledgments for buffers which have been SENT and
                  * fully acknowledged (i.e., SEND buffer should be returned with
@@ -912,7 +1006,28 @@ static void tcp_input_handler(struct pbuf_t* const p)
                 if ( tcpPCB[pcbId].SND_UNA < tcpPCB[pcbId].SEG_ACK &&                       // check segment validity
                      tcpPCB[pcbId].SEG_ACK <= tcpPCB[pcbId].SND_NXT )
                 {
-                    tcpPCB[pcbId].SND_UNA = tcpPCB[pcbId].SEG_ACK;
+                    if ( tcpPCB[pcbId].sendTime == tcpPCB[pcbId].RCV_opt.echoTime )         // first: if the send time matches the echo time stamp of queued packet
+                    {                                                                       // then this ACK is for the queued packet
+                        if ( tcpPCB[pcbId].sendLen > 0 )
+                        {                                                                   // process send buffer pointers only if ACK is for sent data/text
+                            bytes = (int) (tcpPCB[pcbId].SEG_ACK - tcpPCB[pcbId].SND_UNA);  // calculate the number of bytes that were acknowledged
+                            tcpPCB[pcbId].sendCnt -= bytes;                                 // adjust send buffer read pointer and count
+                            tcpPCB[pcbId].sendRDp += bytes;
+                            tcpPCB[pcbId].sendRDp &= CIRC_BUFFER_MASK;
+                            tcpPCB[pcbId].sendLen = 0;
+                        }
+
+                        pbuf_free(tcpPCB[pcbId].pbufQ);                                     // second: free the pbuf and
+                        tcpPCB[pcbId].sendTime = 0L;                                        // removed queued segment from retransmit queue
+                        tcpPCB[pcbId].resendTime = 0L;
+                        tcpPCB[pcbId].retranCnt = 0;
+                        tcpPCB[pcbId].pbufQ = NULL;
+
+                        tcpPCB[pcbId].SND_UNA = tcpPCB[pcbId].SEG_ACK;                      // third: now set SND.UNA <- SEG.ACK
+
+                        /* TODO calculate RTT here
+                         */
+                    }
 
                     if ( tcpPCB[pcbId].SND_WL1 < tcpPCB[pcbId].SEG_SEQ ||
                          (tcpPCB[pcbId].SND_WL1 == tcpPCB[pcbId].SEG_SEQ &&
@@ -967,7 +1082,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
             default:;
         }
 
-        /* sixth, check the URG bit,
+        /* TODO: sixth, check the URG bit,
          * ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2
          *   If the URG bit is set, RCV.UP <- max(RCV.UP,SEG.UP), and signal
          *   the user that the remote side has urgent data if the urgent
@@ -981,8 +1096,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
          */
         if ( flags & TCP_FLAG_URG )
         {
-            // TODO implement
-            assert(1);
+            send_sig(pcbId,TCP_EVENT_URGENT);;
         }
 
         /* seventh, process the segment text,
@@ -1033,6 +1147,16 @@ static void tcp_input_handler(struct pbuf_t* const p)
                     
                     tcpPCB[pcbId].RCV_NXT += bytes;                                         // adjust next ACK parameter
                     tcpPCB[pcbId].RCV_WND -= bytes;                                         // adjust windows size to space in buffer
+
+                    if ( flags & TCP_FLAG_PSH )                                             // notify application of PUSH flag
+                    {
+                        send_sig(pcbId,TCP_EVENT_PUSH);
+                    }
+                    else
+                    {
+                        send_sig(pcbId,TCP_EVENT_DATA_RECV);
+                    }
+
                     send_ack(pcbId);
                 }
                 break;
@@ -1178,18 +1302,20 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
     ip4_err_t           result = ERR_OK;
     uint16_t            checksumTemp = 0;
     uint32_t            pseudoHdrSum;
-    uint16_t            sendCount = 0;
+    uint16_t            bytes, i, j, sendCount = 0;
     struct pbuf_t      *p;
     struct tcp_t       *tcp;
     struct syn_opt_t   *synOpt;
     struct opt_t       *opt;
-
-    PRNT_FUNC;
+    uint8_t            *text;
 
     p = pbuf_allocate();                                                                // allocate a transmit buffer
     if ( p == NULL )                                                                    // exit here is error
         return ERR_MEM;
 
+    /* prepare some common TCP segment content
+     * that will be used in all segment transmissions
+     */
     tcp = (struct tcp_t*) &(p->pbuf[FRAME_HDR_LEN + IP_HDR_LEN]);                       // pointer to TCP header
     tcp->srcPort = stack_hton(tcpPCB[pcbId].localPort);                                 // populate TCP header with common elements
     tcp->destPort = stack_hton(tcpPCB[pcbId].remotePort);
@@ -1199,6 +1325,10 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
 
     tcpPCB[pcbId].SND_opt.time = stack_time();                                          // set this up here, this is a common point for all 'send's
 
+    /* handle reset segments separately
+     * no need to queue these for retransmission
+     * so the pbuf is used and then reclaimed
+     */
     if ( flags & TCP_FLAG_RST )                                                         // send a reset segment
     {
         tcp->seq = stack_htonl(tcpPCB[pcbId].SEG_ACK);                                  // send the reset with the last ACK number
@@ -1210,14 +1340,50 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
         tcp->checksum = ~checksumTemp;
 
         p->len = FRAME_HDR_LEN + IP_HDR_LEN + TCP_HDR_LEN;                              // set packet length
+        result = ip4_output(tcpPCB[pcbId].remoteIP, IP4_TCP, p);                        // transmit the TCP segment
+        pbuf_free(p);
+
+        return result;
     }
-    else if ( flags & TCP_FLAG_SYN )                                                    // when sending a SYN or SYN+ACK
+
+    /* before building a segment to send, check if that segment will
+     * need to be queued: i.e. will carry data and/or have flags other that ACK.
+     * if the segment will need to be queued, then check if there is room in the send queue
+     * and no segment is still waiting for an ACK; if ues, then exit here.
+     * if the segment is just and empty ACK segment then send it
+     */
+    printf("%s() state %d, SND_WND %u, sendCnt %d\n",
+            __func__,
+            tcpPCB[pcbId].state,
+            tcpPCB[pcbId].SND_WND,
+            tcpPCB[pcbId].sendCnt);
+
+    bytes = tcpPCB[pcbId].sendCnt;
+    if ( bytes > (MSS - OPT_BYTES) )                                                    // fit bytes into max segment size
+        bytes = (MSS - OPT_BYTES);
+    if ( bytes > tcpPCB[pcbId].SND_WND )                                                // fit bytes to send into available window
+        bytes = tcpPCB[pcbId].SND_WND;
+
+    if ( ( bytes > 0 || (flags & ~TCP_FLAG_ACK) ) &&                                    // if there is data to send or a control flag other than ACK
+         tcpPCB[pcbId].pbufQ != NULL )                                                  // and the queue is in use
     {
-        tcp->seq = stack_htonl(tcpPCB[pcbId].SND_NXT);
-        if ( flags & TCP_FLAG_ACK )
-            tcp->ack = stack_htonl(tcpPCB[pcbId].RCV_NXT);
-        else
-            tcp->ack = 0;
+        pbuf_free(p);
+        return ERR_TCP_WACK;                                                            // exit here
+    }
+
+    /* at this point we know we can queue a segment if we need to
+     * or that we can send one if the queue is in use but the segment
+     * does not need queuing special handling for queuing ACK segments
+     * is added so that we do not queue ACK segments that do not carry data
+     */
+    tcp->seq = stack_htonl(tcpPCB[pcbId].SND_NXT);
+    if ( flags & TCP_FLAG_ACK )
+        tcp->ack = stack_htonl(tcpPCB[pcbId].RCV_NXT);
+    else
+        tcp->ack = 0;
+
+    if ( flags & TCP_FLAG_SYN )                                                         // when sending a SYN or SYN+ACK
+    {
         tcp->dataOffsAndFlags = stack_hton((SYN_OPT_LEN<<12) + flags);                  // option (MSS and time-stamp) with flags
 
         synOpt = (struct syn_opt_t*) &(tcp->payloadStart);                              // setup options
@@ -1239,12 +1405,7 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
     }
     else
     {
-        tcp->seq = stack_htonl(tcpPCB[pcbId].SND_NXT);
-        if ( flags & TCP_FLAG_ACK )
-            tcp->ack = stack_htonl(tcpPCB[pcbId].RCV_NXT);
-        else
-            tcp->ack = 0;
-        tcp->dataOffsAndFlags = stack_hton((OPT_LEN<<12) + flags);                      // option (time-stamp) with flags
+        tcp->dataOffsAndFlags = stack_hton((OPT_LEN<<12) + flags);                      // options without MSS only time-stamp with flags
 
         opt = (struct opt_t*) &(tcp->payloadStart);                                     // setup options
         opt->tsOpt = 8;                                                                 // time stamp
@@ -1252,21 +1413,43 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
         opt->tsTime = stack_htonl(tcpPCB[pcbId].SND_opt.time);
         opt->tsEcho = stack_htonl(tcpPCB[pcbId].RCV_opt.time);
         opt->endOfOpt = 0;                                                              // padding
-        
-        /* TODO: if PCB is in ESTABLISHED state
-                 then  send data in the outgoing segment
-         */
-        sendCount = 0;
 
-        pseudoHdrSum = pseudo_header_sum(pcbId, TCP_HDR_LEN + OPT_BYTES);               // calculate pseudo-header checksum
-        checksumTemp = stack_checksumEx(tcp, TCP_HDR_LEN + OPT_BYTES, pseudoHdrSum);
+        /* if PCB is in ESTABLISHED or CLOSE_WAIT states and
+         * send window is greater than 0 and there is data to send
+         * then ... send data in the outgoing segment
+         */
+        if ( (tcpPCB[pcbId].state == ESTABLISHED || tcpPCB[pcbId].state == CLOSE_WAIT) &&
+              bytes > 0 )                                                               // 'bytes' already accounts for MSS and current window size
+        {
+            text = (uint8_t*)opt + OPT_BYTES;                                           // pointer to data
+
+            j = tcpPCB[pcbId].sendRDp;                                                  // copy but don't move the pointer until this segment is Ack'd
+            for ( i = 0; i < bytes; i++ )                                               // copy bytes to send into the segment
+            {
+                text[i] = tcpPCB[pcbId].send[j];                                        // copy data bytes
+                j++;
+                j &= CIRC_BUFFER_MASK;                                                  // quick way to make pointer circular
+            }
+            sendCount = bytes;                                                          // adjust for segment size calculations
+            tcpPCB[pcbId].sendLen = bytes;
+            flags |= TCP_FLAG_PSH;                                                      // TODO: always push
+        }
+
+        pseudoHdrSum = pseudo_header_sum(pcbId, TCP_HDR_LEN + OPT_BYTES + sendCount);   // calculate pseudo-header checksum
+        checksumTemp = stack_checksumEx(tcp, TCP_HDR_LEN + OPT_BYTES  + sendCount, pseudoHdrSum);
         tcp->checksum = ~checksumTemp;
 
-        p->len = FRAME_HDR_LEN + IP_HDR_LEN + TCP_HDR_LEN + OPT_BYTES;                  // set packet length
+        p->len = FRAME_HDR_LEN + IP_HDR_LEN + TCP_HDR_LEN + OPT_BYTES + sendCount;      // set packet length
         if ( flags & TCP_FLAG_FIN )                                                     // optional count of FIN signal
             sendCount++;
     }
 
+    /* after sending the segment check if it needs to be queued.
+     * only queue segments that have a control flag other than ACK,
+     * such as SYN or FIN, or segments that carry data.
+     * a segment with only an ACK and not data (length == 0) will not be queued.
+     * such a segment will be transmitted and the pbuf is freed.
+     */
     result = ip4_output(tcpPCB[pcbId].remoteIP, IP4_TCP, p);                            // transmit the TCP segment
     if ( result == ERR_OK ||                                                            // if transmit was successful
          result == ERR_ARP_QUEUE )
@@ -1274,7 +1457,20 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
         tcpPCB[pcbId].SND_NXT += sendCount;                                             // adjust the send next count
     }
 
-    pbuf_free(p);                                                                       // free the transmit buffer
+    if ( (flags & (TCP_FLAG_FIN + TCP_FLAG_SYN)) ||                                     // only queue segments that need to be acknowledged
+          sendCount > 0 )                                                               // ones that have control flags other than ACK or contain data
+    {
+        tcpPCB[pcbId].sendTime = tcpPCB[pcbId].SND_opt.time;                            // time stamp for retransmit calculations and Ack segment matching
+        tcpPCB[pcbId].resendTime = tcpPCB[pcbId].SND_opt.time;
+        tcpPCB[pcbId].retranCnt = 1;                                                    // retransmit count
+        tcpPCB[pcbId].pbufQ = p;                                                        // queue the segment
+    }
+    else
+    {
+        pbuf_free(p);                                                                   // free the pbuf if no queuing is needed
+    }
+
+    printf("%s() %d\n", __func__, result);
 
     return result;
 }
@@ -1304,6 +1500,8 @@ static void get_tcp_opt(uint8_t bytes, uint8_t *optList, struct tcp_opt_t *optio
     uint8_t     byteCount;
 
     PRNT_FUNC;
+
+    options->mss = DEF_MSS;                             // default in case peer does not provide an MSS
 
     while ( bytes )
     {
@@ -1336,8 +1534,11 @@ static void get_tcp_opt(uint8_t bytes, uint8_t *optList, struct tcp_opt_t *optio
             case 8:
                 byteCount = *(optList++);               // get time stamp info
                 options->time = stack_ntohl(*((uint32_t*)optList));
-                printf(" remote time stamp=%lu\n", options->time);
-                optList += 8;
+                printf(" received time stamp=%lu\n", options->time);
+                optList += 4;
+                options->echoTime = stack_ntohl(*((uint32_t*)optList));
+                printf(" echo time stamp=%lu\n", options->echoTime);
+                optList += 4;
                 bytes -= byteCount;
                 break;
 
@@ -1421,6 +1622,22 @@ static void tcp_timeout_handler(uint32_t now)
                 }
                 break;
         }
+
+        if ( tcpPCB[i].pbufQ != NULL )                                      // if a segment is not queued
+        {
+            if ( tcpPCB[i].retranCnt > TCP_MAX_RETRAN )                     // check if the retransmit count was exceeded
+            {
+                send_rst(i);                                                // if yes, so reset connection
+                send_sig(i,TCP_EVENT_ABORTED);                              // signal the application that the connection is being aborted
+                free_tcp_pcb(i);                                            // close the connection
+            }                                                               // otherwise
+            else if ( (now - tcpPCB[i].resendTime) >= (tcpPCB[i].RT0 * tcpPCB[i].retranCnt) )
+            {                                                               // if the RTT time was exceeded then
+                ip4_output(tcpPCB[i].remoteIP, IP4_TCP, tcpPCB[i].pbufQ);   // retransmit the TCP segment
+                tcpPCB[i].resendTime = now;
+                tcpPCB[i].retranCnt *= 2;                                   // double the retransmit interval
+            }
+        }
     }
 }
 
@@ -1438,18 +1655,9 @@ static void free_tcp_pcb(pcbid_t pcbId)
     if ( pcbId >= TCP_PCB_COUNT )
         return;
 
-    // TODO clear all resources associated with this PCB
-    tcpPCB[pcbId].localIP = 0;
-    tcpPCB[pcbId].localPort = 0;
-    tcpPCB[pcbId].remoteIP = 0;
-    tcpPCB[pcbId].remotePort = 0;
-    
-    tcpPCB[pcbId].sendWRp = 0;
-    tcpPCB[pcbId].sendRDp = 0;
-    tcpPCB[pcbId].sendCnt = 0;
-    tcpPCB[pcbId].recvWRp = 0;
-    tcpPCB[pcbId].recvRDp = 0;
-    tcpPCB[pcbId].recvCnt = 0;
+    if ( tcpPCB[pcbId].pbufQ != NULL )
+        pbuf_free(tcpPCB[pcbId].pbufQ);                                     // free the pbuf
 
+    memset(&(tcpPCB[pcbId]), 0, sizeof(struct tcp_pcb_t));                  // clear all resources associated with this PCB
     set_state(pcbId,FREE);                                                  // close the connection
 }

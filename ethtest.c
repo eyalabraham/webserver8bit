@@ -128,6 +128,7 @@ int             issueTcpClose = 0, clientState = -1;
 char            ip[17];
 pcbid_t         tcpListner = -1, tcpServer = -1, tcpClient = -1;
 uint8_t         data[RECV_BUFF_SIZE];
+uint8_t         senddata[] = "1---5---10---15---20---25---30---35---40---45---50---55---60---65---70---75---80";
 
 /*------------------------------------------------
  * ping_input()
@@ -207,13 +208,14 @@ void ntp_input(struct pbuf_t* const p, const ip4_addr_t srcIP, const uint16_t sr
 void notify_callback(pcbid_t connection, tcp_event_t reason)
 {
     ip4_addr_t  ip4addr;
+    int         recvResult, i;
 
     printf("==> ");
     switch ( reason )
     {
         case TCP_EVENT_CLOSE:
             printf("connection closed by");
-            issueTcpClose = 1;                          // remote client closed the connection, issu a close to go from CLOSE_WAIT to LAST_ACK
+            issueTcpClose = 1;                          // remote client closed the connection, issue a close to go from CLOSE_WAIT to LAST_ACK
             break;
 
         case TCP_EVENT_REMOTE_RST:
@@ -221,7 +223,23 @@ void notify_callback(pcbid_t connection, tcp_event_t reason)
             break;
 
         case TCP_EVENT_DATA_RECV:
-            printf("data available from");
+        case TCP_EVENT_PUSH:
+            recvResult = tcp_recv(connection, data, RECV_BUFF_SIZE);    // try to read the receive buffer
+            if ( recvResult < 0 )                                       // negative results are errors
+            {
+                printf("tcp_recv() error code %d\n", recvResult);
+            }
+            else if ( recvResult > 0 )                                  // positive results larger than 0
+            {
+                printf("tcp_recv() [");
+                for ( i = 0; i < recvResult; i++ )                      // are character data sent by the remote client
+                {
+                    printf("%c", data[i]);                              // assume these are all printable characters
+                }
+                printf("]\n");
+            }
+
+            printf("%d bytes received from", recvResult);
             break;
 
         default:
@@ -369,7 +387,7 @@ int main(int argc, char* argv[])
             assert(tcpClient >= 0);                                             // make sure it is valid
             assert(tcp_bind(tcpClient,IP4_ADDR(192,168,1,19),60001) == ERR_OK); // bind on port 60001
             assert(tcp_notify(tcpClient, notify_callback) == ERR_OK);           // notify on remote connection close
-            assert(tcp_connect(tcpClient,IP4_ADDR(192,168,1,10),7) == ERR_OK);  // try to connect
+            assert(tcp_connect(tcpClient,IP4_ADDR(192,168,1,10),60002) == ERR_OK);  // try to connect
         }
         else
         {
@@ -377,6 +395,8 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
+
+    i = 0;                                                                      // clear for reuse below
 
     /* main loop
      *
@@ -415,13 +435,33 @@ int main(int argc, char* argv[])
             if ( clientState != tcp_is_connected(tcpClient) )
             {
                 clientState = tcp_is_connected(tcpClient);
-                printf("==> client is %s connected\n", (clientState ? " " : "not"));
+                printf("==> client is%sconnected\n", (clientState ? " " : " not "));
             }
 
             if ( clientState )                                              // if client is connected
             {
-                printf("tcp_close() returned %d\n", tcp_close(tcpClient));  // issue a close() from the client end to test active close state machine
-            }
+                if ( i < (sizeof(senddata) - 1) )                           // any more data to send?
+                {
+                    j = tcp_send(tcpClient, &(senddata[i]), 80, TCP_FLAG_PSH); // send what you can "(sizeof(senddata) - 1 - i)"
+                    if ( j < 0 )                                            // was there a send error?
+                    {
+                        printf("tcp_send() error %d\n", j);                 // yes, print error code.
+                    }
+                    else
+                    {
+                        i += j;                                             // no, accumulate sent string count
+                    }
+                }
+                else                                                        // no, so we're done
+                {
+                    j = tcp_close(tcpClient);                               // close the connection
+                    if ( j == ERR_OK )
+                    {
+                        tcpClient = 0;                                      // reset PCB if the close was successful
+                    }
+                    printf("tcp_close() returned %d\n", j);                 // print the close exit code
+                }
+            } /* if client is connected */
         }
 
         if ( whatToDo == SRVR &&                                            // when testing TCP server

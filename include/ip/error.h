@@ -34,7 +34,8 @@ typedef enum                        // stack wide error codes
     ERR_NOT_LSTN  = -16,            // PCB is not in listed state
     ERR_PCB_ALLOC = -17,            // could not allocate/find PCB
     ERR_TCP_CLOSING = -18,          // a command issued to a TCP connection that is in the process of closing
-    ERR_TCP_CLOSED  = -19           // a command issued to a TCP connection that is closed
+    ERR_TCP_CLOSED  = -19,          // a command issued to a TCP connection that is closed
+    ERR_TCP_WACK  = -20             // TCP is waiting for an ACK, cannot transmit the segment
 } ip4_err_t;
 
 #endif /* __IP4ERROR_H__ */

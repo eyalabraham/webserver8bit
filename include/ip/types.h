@@ -265,7 +265,8 @@ typedef enum                                                    // enumeration o
     TCP_EVENT_REMOTE_RST,                                       // remote side reset the connection
     TCP_EVENT_DATA_RECV,                                        // data received notification
     TCP_EVENT_PUSH,                                             // push flag was set for received data in buffer
-    TCP_EVENT_URGENT                                            // urgent data segment arrived (not implemented)
+    TCP_EVENT_URGENT,                                           // urgent data segment arrived (not implemented)
+    TCP_EVENT_ABORTED                                           // the TCP connection was reset and aborted due to excessive retries
 }tcp_event_t;
 
 typedef void (*tcp_accept_callback)(pcbid_t);                   // TCP server accept connection callback function
@@ -276,6 +277,7 @@ struct tcp_opt_t                                                // supported TCP
     uint16_t            mss;                                    // max segment size
     uint8_t             winScale;                               // window scale
     uint32_t            time;                                   // time stamp sent or to echo
+    uint32_t            echoTime;                               // time stamp echo
 };
 
 struct tcp_pcb_t
@@ -321,6 +323,14 @@ struct tcp_pcb_t
     uint16_t            sendWRp;                                // write index to circular buffer
     uint16_t            sendRDp;                                // read index from circular buffer
     int                 sendCnt;                                // bytes available in buffer
+    uint16_t            sendLen;                                // data/text length of last segment send
+    uint32_t            sendTime;                               // segment retransmit time reference
+    uint32_t            resendTime;                             // last retransmit time
+    uint8_t             retranCnt;                              // retransmit count
+    uint32_t            RT0;                                    // current retransmit time
+    uint32_t            SRTT;                                   // smoothed round-trip time
+    uint32_t            RTTVAR;                                 // round-trip time variation
+    struct pbuf_t      *pbufQ;                                  // pbuf retransmit queue
     uint8_t            *recv;                                   // pointer to circular receive buffer
     uint16_t            recvWRp;
     uint16_t            recvRDp;
