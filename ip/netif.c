@@ -31,7 +31,7 @@
  * param:  'netif' the network stack structure to which this interface connects
  * return: ERR_OK or any other ip4_err_t on error
  *
- * @@ variables hard coded in this function, like MAC address
+ * TODO variables hard coded in this function, like MAC address
  *    or function pointers should be passed as variables. this will make the
  *    function general for use with any link interface driver!
  *

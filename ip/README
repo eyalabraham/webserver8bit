@@ -145,13 +145,19 @@ functionality describe in #5.
     The TCP module is the most basic TCP implementation that closely follows the TCP RFC 793 and its errata.
     The implementation also include select corrections and features from RFC 1122.
     First step was to get the TCP state-machine coded. I used the RFC and this resource as a reference
-    <http://www.saminiir.com/lets-code-tcp-ip-stack-1-ethernet-arp/>, next I implemented to receive and then the send
-    functions. The TCP module API is a combination of ideas from LwIP and the socket API formats, and also borrows from
+    <http://www.saminiir.com/lets-code-tcp-ip-stack-1-ethernet-arp/>, next I implemented the receive and then the send
+    functions. The TCP module API is a combination of ideas from LwIP and the socket API formats, and borrows ideas from
     the application interface suggested in RFC 793.
     This TCP protocol does not support:
     - congestion control mechanisms, and is not a high performance implementation.
     - 'urgent' data handling
     - selective acknowledgment mechanism
+    Segment retransmission logic is greatly simplified. I chose to queue one segment at a time, while waiting for that segment's
+    acknowledgment. One a queued segment is acknowledged other data and/or SYN/FIN segments can be sent. The implementation
+    only queues segments that expect an acknowledgment; such as data, SYN and FIN segments. All other segments are sent
+    through without queuing; such as RST or simple ACK with no data in the segments.
+    The TCP implementation does not calculate RTT. Instead, a fixed RTT of 1sec is used, and retransmission wait time is doubled
+    every time a timer expires. The TCP attempt 10 retransmissions before aborting the connection with a RST.
 
  6. Common stack components
 -----------------------------------------
@@ -208,7 +214,6 @@ To-Dos
     structure and act by calling a registered callback
 5.  fragmentation and assembly of IPv4 packets
 6.  TCP
-    - timer to clear 'stuck' PCBs; e.g. PCB the is in SYN_RECEIVED, send SYN/ACK but never got final ACK. send RST and clear PCB
     - check TCP checksum when segment is received
       
  8. File list

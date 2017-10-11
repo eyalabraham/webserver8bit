@@ -12,8 +12,6 @@
 #include    <string.h>
 #include    <assert.h>
 
-#include    <stdio.h>               // @@ for printf() debug only
-
 #include    "ip/arp.h"
 #include    "ip/ipv4.h"
 #include    "ip/stack.h"
@@ -213,14 +211,6 @@ void arp_input(struct pbuf_t* const p, struct net_interface_t* const netif)
     switch ( stack_ntoh(frame->type) )                      // determine frame type
     {
         case TYPE_ARP:                                      // handle ARP frames
-/*
-            printf(" [arp] htype %04x ptype %04x op %04x spa %08lx tpa %08lx\n",
-                 stack_ntoh(arp->htype),
-                 stack_ntoh(arp->ptype),
-                 stack_ntoh(arp->oper),
-                 arp->spa,
-                 arp->tpa);
-*/
             if ( stack_ntoh(arp->htype) != ARP_ETH_TYPE || stack_ntoh(arp->ptype) != TYPE_IPV4 )
                 break;                                      // drop the packet if not matching on network and protocol type
             switch ( stack_ntoh(arp->oper) )                // action is based on the operation indicator
@@ -246,7 +236,7 @@ void arp_input(struct pbuf_t* const p, struct net_interface_t* const netif)
             ip4_input(p, netif);                            // all inputs go here from any network interface
             break;  /* end of handling TYPE_IPV4 */
 
-        default:;                                           // drop everything else @@ handle unidentified frame types
+        default:;                                           // drop everything else TODO handle unidentified frame types
     } /* end of frame type switch */
 }
 
@@ -271,22 +261,8 @@ ip4_err_t arp_output(struct net_interface_t* const netif, struct pbuf_t* const p
     ip4_addr_t               destIp;
     ip4_err_t                result, queue_result;
 
-    frame = (struct ethernet_frame_t*) p->pbuf;                     // establish pointer to etherner frame
+    frame = (struct ethernet_frame_t*) p->pbuf;                     // establish pointer to ethernet frame
     ipHeader = (struct ip_header_t*) &(frame->payloadStart);        // establish pointer to IP header
-
-/*
-    {
-        int     i,j;
-        printf(" seek %08lx\n",ipHeader->destIp);
-        for (i = 0; i < ARP_TABLE_LENGTH; i++)
-        {
-            printf(" %08lx  ", netif->arpTable[i].ipAddress);
-            for (j = 0; j < 6; j++)
-                printf("%02x:",netif->arpTable[i].hwAddress[j]);
-            printf("\n");
-        }
-    }
-*/
 
     /* extract destination IP and check if it is in this
      * interface's subnet. if it is not, then send the packet

@@ -208,7 +208,7 @@ static spiDevErr_t readPhyRegister(phyReg_t reg, uint16_t* word)
         goto ABORT_PHYRD;
 
     setControlBit(MICMD, MICMD_MIIRD);              // start the read operation
-    while ( controlBit(MISTAT, MISTAT_BUSY) ) {};   // wait for read operation to complete @@ timeouts?
+    while ( controlBit(MISTAT, MISTAT_BUSY) ) {};   // wait for read operation to complete TODO timeouts?
     clearControlBit(MICMD, MICMD_MIIRD);            // clear read request
     readControlRegister(MIRDL, &byte);              // read low byte
     *word = byte;
@@ -251,7 +251,7 @@ static spiDevErr_t writePhyRegister(phyReg_t reg, uint16_t word)
 
     writeControlRegister(MIRDL, (uint8_t) word);
     writeControlRegister(MIRDH, (uint8_t) (word >> 8));
-    while ( controlBit(MISTAT, MISTAT_BUSY) ) {};   // wait for write operation to complete @@ timeouts?
+    while ( controlBit(MISTAT, MISTAT_BUSY) ) {};   // wait for write operation to complete TODO timeouts?
 
 ABORT_PHYWR:
 #ifdef DRV_DEBUG_FUNC_EXIT
@@ -573,7 +573,7 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
 
     // transfer packet data into ENC28J60 output buffer
     // the size of the data in each pbuf is kept in the ->len variable.
-    assert(writeMemBuffer(p->pbuf, (uint16_t) INIT_EWRPT, p->len) == SPI_OK); // @@ convert to proper error handling, with: do { ... } while (0);
+    assert(writeMemBuffer(p->pbuf, (uint16_t) INIT_EWRPT, p->len) == SPI_OK); // TODO convert to proper error handling, with: do { ... } while (0);
 
     tempU16 = (uint16_t) INIT_ETXST;                            // calculate buffer end address
     tempU16 += p->len;
@@ -612,7 +612,7 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
     if ( controlBit(EIR, EIR_TXERIF) )                          // check for errors
     {
         if ( ethif->txStatVector.txStatus2 & LATE_COLL_STAT )   // determine type of transmit link collisions
-            result = ERR_TX_LCOLL;                              // @@ should address errata #15 here
+            result = ERR_TX_LCOLL;                              // TODO should address errata #15 here
         else
             result = ERR_TX_COLL;
 
@@ -702,7 +702,7 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
     }
 #endif
 
-    // acknowledge that a packet has been read from ENC28J60             @@ need to implement errata #14
+    // acknowledge that a packet has been read from ENC28J60             TODO need to implement errata #14
     writeControlRegister(ERXRDPTL, ethif->rxStatVector.nextPacketL);  // update ERXRDPT to free read-packet buffer space
     writeControlRegister(ERXRDPTH, ethif->rxStatVector.nextPacketH);
     setControlBit(ECON2, ECON2_PKTDEC);                               // decrement packet waiting count
@@ -715,7 +715,7 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
  *
  *  returns the link status
  *  by reading LLSTAT in PHSTAT1
- *  ( @@ what is the effect of using LSTAT in PHSTAT2? )
+ *  ( TODO what is the effect of using LSTAT in PHSTAT2? )
  *
  * ----------------------------------------- */
 int link_state(void)
@@ -847,7 +847,7 @@ struct enc28j60_t* enc28j60Init(void)
 
     if ( link_state() == 1 )
     {
-        setControlBit(ECON1, ECON1_RXEN);                   // enable frame reception @@ do I do these here?
+        setControlBit(ECON1, ECON1_RXEN);                   // enable frame reception TODO do I do these here?
         result = &deviceState;
     }
 

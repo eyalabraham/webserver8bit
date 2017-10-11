@@ -24,6 +24,10 @@
 #include    "lmte.h"
 #endif
 
+#if DEBUG_ON
+#include    <stdio.h>           // for debug time
+#endif
+
 /* -----------------------------------------
    module globals
 ----------------------------------------- */
@@ -300,7 +304,7 @@ struct pbuf_t* const pbuf_allocate(void)
         }
     }
 
-    assert(p);                                      // @@ keep this here for a little while...
+    assert(p);                                      // TODO keep this here for a little while...
 
     return p;
 }
@@ -489,8 +493,9 @@ char* stack_ip4addr_ntoa(ip4_addr_t s_addr, char* const buf, uint8_t buflen)
  *  return: none
  *
  */
-void inputStub(struct pbuf_t* const p, struct net_interface_t* const netif)     // @@ don't think we need a 'netif' here?
+void inputStub(struct pbuf_t* const p, struct net_interface_t* const netif)
 {
+#if DEBUG_ON
     int     i;
 
     printf("");
@@ -505,35 +510,5 @@ void inputStub(struct pbuf_t* const p, struct net_interface_t* const netif)     
     for (i = 12; i < 14; i++)
         printf("%02x ", (p->pbuf)[i]);
     printf("\n");
-}
-
-/*------------------------------------------------
- * outputStub()
- *
- *  this function is a stub function for ethernet output.
- *  received packets will be forwarded to this function and be
- *  dropped (or can be displayed for debug...)
- *
- *  param:  pbuf pointer to received data and the network interface structure
- *  return: ERR_OK on success or other status on failure.
- *
- */
-ip4_err_t outputStub(struct net_interface_t* const netif, struct pbuf_t* const p)
-{
-    int     i;
-
-    printf("");
-
-    printf("outputStub()\n dst: ");
-    for (i = 0; i < 6; i++)
-        printf("%02x ", (p->pbuf)[i]);
-    printf("\n src: ");
-    for (i = 6; i < 12; i++)
-        printf("%02x ", (p->pbuf)[i]);
-    printf("\n typ: ");
-    for (i = 12; i < 14; i++)
-        printf("%02x ", (p->pbuf)[i]);
-    printf("\n");
-
-    return ERR_OK;
+#endif
 }

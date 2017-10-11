@@ -98,4 +98,10 @@
 #define     TCP_MSL_TIMEOUT     120000      // Maximum Segment Lifetime (in RFC-793 = 2 minutes)
 #define     TCP_HSTATE_TIMEOUT  300000      // time out to exit a half open or half closed state
 
+/*
+ * general debug options
+ *
+ */
+#define     DEBUG_ON            1           // set to '0' to turn off debug printing
+
 #endif  /* __OPTIONS_H__ */

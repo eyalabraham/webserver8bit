@@ -45,7 +45,5 @@ char*                           stack_ip4addr_ntoa(ip4_addr_t, char* const, uint
 
 void                            inputStub(struct pbuf_t* const,                         // input stub function
                                           struct net_interface_t* const);
-ip4_err_t                       outputStub(struct net_interface_t* const,               // output stub function
-                                           struct pbuf_t* const);
 
 #endif /* __IP4STACK_H__ */

@@ -108,7 +108,7 @@ void udp_close(struct udp_pcb_t *pcb)
  *
  *  bind a PCB connection to a local IP address and a port
  *  this function should be called after udp_new() and before using UDP send/receive functions
- *  @@ if port number is '0', the function will bind to first available arbitrary port number
+ *  TODO if port number is '0', the function will bind to first available arbitrary port number
  *
  * param:  pointer to a valid PCB, local IP 'addr' and 'port'
  * return: ERR_OK if no errors or ip4_err_t with error code

@@ -25,11 +25,13 @@
 #include    <string.h>
 #include    <assert.h>
 
-#include    <stdio.h>           // for debug time
-
 #include    "ip/tcp.h"
 #include    "ip/ipv4.h"
 #include    "ip/stack.h"
+
+#if DEBUG_ON
+#include    <stdio.h>           // for debug time
+#endif
 
 /* -----------------------------------------
    module macros and types
@@ -42,11 +44,18 @@
 #define     send_fin_ack(p)     send_segment(p, (TCP_FLAG_FIN+TCP_FLAG_ACK))
 #define     send_rst(p)         send_segment(p, TCP_FLAG_RST)
 
+#if DEBUG_ON
+#define     set_state(p,s)      {                                                                                        \
+                                    printf("%s() connection %d, state change %d -> %d\n",__func__, p,tcpPCB[p].state,s); \
+                                    tcpPCB[p].state = s;                                                                 \
+                                    tcpPCB[p].timeInState = stack_time();                                                \
+                                }
+#else
 #define     set_state(p,s)      {                                                                           \
-                                    printf(" connection %d, state change %d -> %d\n",p,tcpPCB[p].state,s);  \
                                     tcpPCB[p].state = s;                                                    \
                                     tcpPCB[p].timeInState = stack_time();                                   \
                                 }
+#endif
 
 #define     send_sig(p,s)       {                                               \
                                     if ( tcpPCB[p].tcp_notify_fn != NULL )      \
@@ -233,9 +242,9 @@ ip4_err_t tcp_close(pcbid_t pcbId)
 {
     ip4_err_t   result = ERR_OK;
 
-    PRNT_FUNC;
-
-    printf(" pcbId %d, state=%d\n", pcbId, tcpPCB[pcbId].state);
+#if DEBUG_ON
+    printf("-> %s() pcbId %d, state=%d\n", __func__, pcbId, tcpPCB[pcbId].state);
+#endif
 
     if ( pcbId >= TCP_PCB_COUNT )
         return ERR_PCB_ALLOC;
@@ -367,6 +376,10 @@ ip4_err_t tcp_connect(pcbid_t pcbId, ip4_addr_t serverIP, uint16_t serverPort)
 {
     ip4_err_t       result;
 
+#if DEBUG_ON
+    printf("-> %s()\n", __func__);
+#endif
+
     if ( pcbId >= TCP_PCB_COUNT )
         return ERR_PCB_ALLOC;
 
@@ -434,6 +447,10 @@ int tcp_send(pcbid_t pcbId, uint8_t* const data, uint16_t count, uint16_t flags)
 {
     int     result = 0;
     int     bytes, i;
+
+#if DEBUG_ON
+    printf("-> %s()\n", __func__);
+#endif
 
     if ( count == 0 || data == NULL )
         return 0;
@@ -515,6 +532,10 @@ int tcp_recv(pcbid_t pcbId, uint8_t* const data, uint16_t count)
 {
     int     result = 0;
     int     bytes, i;
+
+#if DEBUG_ON
+    printf("-> %s()\n", __func__);
+#endif
 
     if ( count == 0 || data == NULL )
         return 0;
@@ -648,7 +669,9 @@ static void tcp_input_handler(struct pbuf_t* const p)
     int                 bytes, i;
     ip4_err_t           result;
 
-    PRNT_FUNC;
+#if DEBUG_ON
+    printf("-> %s()\n", __func__);
+#endif
 
     ip = (struct ip_header_t*) &(((struct ethernet_frame_t*)(p->pbuf))->payloadStart);  // pointer to IP packet header
     tcp = (struct tcp_t*)(((uint8_t*) ip) + ((ip->verHeaderLength & 0x0f) * 4));        // pointer to the TCP header
@@ -694,18 +717,8 @@ static void tcp_input_handler(struct pbuf_t* const p)
     tcpPCB[pcbId].SEG_SEQ = stack_ntohl(tcp->seq);
     tcpPCB[pcbId].SEG_ACK = stack_ntohl(tcp->ack);
     tcpPCB[pcbId].SEG_LEN = p->len - FRAME_HDR_LEN - ((ip->verHeaderLength & 0x0f) * 4) - dataOff;  // number of bytes occupied by the data in the segment
-    //printf("tcpPCB[pcbId].SEG_LEN = %d\n", tcpPCB[pcbId].SEG_LEN);
     tcpPCB[pcbId].SEG_WND = stack_ntoh(tcp->window);
     tcpPCB[pcbId].SEG_UP  = stack_ntoh(tcp->urgentPtr);
-
-/*
-    if ( tcpPCB[pcbId].SEG_WND != tcpPCB[pcbId].SND_WND )                                   // check for window update
-    {
-        tcpPCB[pcbId].SND_WND = tcpPCB[pcbId].SEG_WND;                                      // update window size
-        tcpPCB[pcbId].SND_WL1 = tcpPCB[pcbId].SEG_SEQ;
-        tcpPCB[pcbId].SND_WL2 = tcpPCB[pcbId].SEG_ACK;
-    }
-*/
 
     if ( dataOff > 20 )                                                                     // get TCP options
     {
@@ -799,11 +812,6 @@ static void tcp_input_handler(struct pbuf_t* const p)
          * so we need to check matching ACK to sent SYN and if ok
          * clear the queued SYN packed we have sent
          */
-/*
-        printf("sendTime=%lu RCV_opt.echoTime=%lu\n",
-                tcpPCB[pcbId].sendTime,
-                tcpPCB[pcbId].RCV_opt.echoTime);
-*/
         if ( tcpPCB[pcbId].sendTime == tcpPCB[pcbId].RCV_opt.echoTime )                     // if the send time matches the echo time stamp of queued packet
         {                                                                                   // then this Ack is for the queued packet
             pbuf_free(tcpPCB[pcbId].pbufQ);                                                 // free the pbuf and
@@ -863,10 +871,6 @@ static void tcp_input_handler(struct pbuf_t* const p)
             if ( tcpPCB[pcbId].SND_UNA > tcpPCB[pcbId].ISS )
             {
                 send_ack(pcbId);
-/*
-                if ( tcpPCB[pcbId].tcp_accept_fn != NULL )                                  // guard, but should never be NULL
-                    tcpPCB[pcbId].tcp_accept_fn(pcbId);                                     // call the listner's accept callback
-*/
                 set_state(pcbId,ESTABLISHED);
             }
             else
@@ -955,12 +959,6 @@ static void tcp_input_handler(struct pbuf_t* const p)
             return;
         }
 
-/*
-        printf("SEG_ACK %lu, SND_UNA %lu, SND_NXT %lu\n",
-                tcpPCB[pcbId].SEG_ACK,
-                tcpPCB[pcbId].SND_UNA,
-                tcpPCB[pcbId].SND_NXT);
-*/
         switch ( tcpPCB[pcbId].state )
         {
             case SYN_RECEIVED:
@@ -1309,6 +1307,10 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
     struct opt_t       *opt;
     uint8_t            *text;
 
+#if DEBUG_ON
+    printf("-> %s()\n", __func__);
+#endif
+
     p = pbuf_allocate();                                                                // allocate a transmit buffer
     if ( p == NULL )                                                                    // exit here is error
         return ERR_MEM;
@@ -1352,11 +1354,13 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
      * and no segment is still waiting for an ACK; if ues, then exit here.
      * if the segment is just and empty ACK segment then send it
      */
+#if DEBUG_ON
     printf("%s() state %d, SND_WND %u, sendCnt %d\n",
             __func__,
             tcpPCB[pcbId].state,
             tcpPCB[pcbId].SND_WND,
             tcpPCB[pcbId].sendCnt);
+#endif
 
     bytes = tcpPCB[pcbId].sendCnt;
     if ( bytes > (MSS - OPT_BYTES) )                                                    // fit bytes into max segment size
@@ -1470,7 +1474,9 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
         pbuf_free(p);                                                                   // free the pbuf if no queuing is needed
     }
 
-    printf("%s() %d\n", __func__, result);
+#if DEBUG_ON
+    printf("<- %s() %d\n", __func__, result);
+#endif
 
     return result;
 }
@@ -1499,7 +1505,9 @@ static void get_tcp_opt(uint8_t bytes, uint8_t *optList, struct tcp_opt_t *optio
 {
     uint8_t     byteCount;
 
-    PRNT_FUNC;
+#if DEBUG_ON
+    printf("-> %s()\n", __func__);
+#endif
 
     options->mss = DEF_MSS;                             // default in case peer does not provide an MSS
 
@@ -1518,7 +1526,9 @@ static void get_tcp_opt(uint8_t bytes, uint8_t *optList, struct tcp_opt_t *optio
             case 2:
                 byteCount = *(optList++);               // get MSS
                 options->mss = stack_ntoh(*((uint16_t*)optList));
-                printf(" remote mss=%d\n", options->mss);
+#if DEBUG_ON
+                printf("%s() remote mss=%d\n",__func__, options->mss);
+#endif
                 optList += 2;
                 bytes -= byteCount;
                 break;
@@ -1526,7 +1536,9 @@ static void get_tcp_opt(uint8_t bytes, uint8_t *optList, struct tcp_opt_t *optio
             case 3:
                 byteCount = *(optList++);               // get window scale
                 options->winScale = *optList;
-                printf(" remote win scale=%d\n", options->winScale);
+#if DEBUG_ON
+                printf("%s() remote win scale=%d\n",__func__, options->winScale);
+#endif
                 optList += 1;
                 bytes -= byteCount;
                 break;
@@ -1534,10 +1546,14 @@ static void get_tcp_opt(uint8_t bytes, uint8_t *optList, struct tcp_opt_t *optio
             case 8:
                 byteCount = *(optList++);               // get time stamp info
                 options->time = stack_ntohl(*((uint32_t*)optList));
-                printf(" received time stamp=%lu\n", options->time);
+#if DEBUG_ON
+                printf("%s() received time stamp=%lu\n",__func__, options->time);
+#endif
                 optList += 4;
                 options->echoTime = stack_ntohl(*((uint32_t*)optList));
-                printf(" echo time stamp=%lu\n", options->echoTime);
+#if DEBUG_ON
+                printf("%s() echo time stamp=%lu\n",__func__, options->echoTime);
+#endif
                 optList += 4;
                 bytes -= byteCount;
                 break;
