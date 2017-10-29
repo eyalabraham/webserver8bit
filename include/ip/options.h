@@ -26,7 +26,7 @@
 #define     HOSTNAME            "nec-v25\0"
 
 #define     RX_BUFS             1           // # of input packet buffers, relying on enc28j60 8K buffering
-#define     TX_BUFS             2           // # of output packet buffers
+#define     TX_BUFS             3           // # of output packet buffers
 #define     ARP_QUEUE_BUFS      2           // # of queuing buffers for packets waiting for ARP resolution
 #define     PACKET_BUFS         (RX_BUFS+TX_BUFS+ARP_QUEUE_BUFS)
 #define     MAX_PBUFS           8           // max # of RX or TX buffers
@@ -85,23 +85,23 @@
 #define     DEF_MSS             536         // default if not received from peer (RFC 1122 4.2.2.6  Maximum Segment Size Option: RFC-793 Section 3.1)
 #define     MSS                 MAX_SEGMENT_LEN
 
-#define     DEF_RTT             1000        // 1[sec] RFC 6298 section 2.1
-#define     TCP_MAX_RETRAN      10          // maximum number of TCP segment retransmits before reset and connection abort
+#define     DEF_RTT             2000UL      // changes to 2[sec] because of slow CPU (was 1[sec] RFC 6298 section 2.1)
+#define     TCP_MAX_RETRAN      5           // maximum number of TCP segment retransmits before reset and connection abort
 
 #define     TCP_SERVER_COUNT    1           // number of listening servers
-#define     TCP_CONN_PER_SRVR   2           // max incoming connections per server
-#define     TCP_CLIENT_COUNT    2           // max outgoing client connections
+#define     TCP_CONN_PER_SRVR   10          // max incoming connections per server
+#define     TCP_CLIENT_COUNT    0           // max outgoing client connections
 #define     TCP_PCB_COUNT       (TCP_CLIENT_COUNT+TCP_SERVER_COUNT*(1+TCP_CONN_PER_SRVR))
-#define     TCP_DATA_BUF_SIZE   512         // in bytes, max 32,768 bytes in powers of 2: 2, 4, 8, 16, 32, ...
+#define     TCP_DATA_BUF_SIZE   1024        // in bytes, max 32,768 bytes in powers of 2: 2, 4, 8, 16, 32, ...
 #define     TCP_DEF_WINDOW      TCP_DATA_BUF_SIZE   // bytes
 
-#define     TCP_MSL_TIMEOUT     120000      // Maximum Segment Lifetime (in RFC-793 = 2 minutes)
-#define     TCP_HSTATE_TIMEOUT  300000      // time out to exit a half open or half closed state
+#define     TCP_MSL_TIMEOUT     30000UL     // Maximum Segment Lifetime (in RFC-793 = 2 minutes)
+#define     TCP_HSTATE_TIMEOUT  120000UL    // time out to exit a half open or half closed state (typical = 5min)
 
 /*
  * general debug options
  *
  */
-#define     DEBUG_ON            1           // set to '0' to turn off debug printing
+#define     DEBUG_ON            0           // set to '0' to turn off debug printing
 
 #endif  /* __OPTIONS_H__ */

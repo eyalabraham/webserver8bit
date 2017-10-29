@@ -80,6 +80,13 @@ ETHTESTLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  OPTION MAP=ethtest                       \
                  OPTION ELIMINATE
 
+HTTPDLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos   \
+               LIBPATH /home/eyal/bin/watcom/lib286       \
+               FORMAT DOS                                 \
+               OPTION STACK=16k                           \
+               OPTION MAP=httpd                           \
+               OPTION ELIMINATE
+                 
 WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
             LIBPATH /home/eyal/bin/watcom/lib286     \
             FORMAT DOS                               \
@@ -149,6 +156,16 @@ ethtest.o: ethtest.c
 
 ethtest.exe: ethtest.o ppispi.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ) $(TRANSPORTOBJ)
 	$(LINK) $(ETHTESTLINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
+
+#------------------------------------------------------------------------------------
+# build httpd.exe test program
+#------------------------------------------------------------------------------------
+httpd: httpd.exe
+
+httpd.o: httpd.c
+
+httpd.exe: httpd.o ppispi.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ) $(TRANSPORTOBJ)
+	$(LINK) $(HTTPDLINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
 
 #------------------------------------------------------------------------------------
 # generate ws.exe

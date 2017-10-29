@@ -25,7 +25,7 @@ APPLICATION=$(IPDIR)/ntp.c \
 	$(IPDIR)/ping.c
 
 IPSTACK=$(STACKCORE) \
-	$(DRIVER) \
+	$(INTERFACE) \
 	$(NETWORK) \
 	$(TRANSPORT) \
 	$(APPLICATION)

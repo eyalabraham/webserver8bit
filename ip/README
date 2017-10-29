@@ -153,7 +153,7 @@ functionality describe in #5.
     - 'urgent' data handling
     - selective acknowledgment mechanism
     Segment retransmission logic is greatly simplified. I chose to queue one segment at a time, while waiting for that segment's
-    acknowledgment. One a queued segment is acknowledged other data and/or SYN/FIN segments can be sent. The implementation
+    acknowledgment. Once a queued segment is acknowledged other data and/or SYN/FIN segments can be sent. The implementation
     only queues segments that expect an acknowledgment; such as data, SYN and FIN segments. All other segments are sent
     through without queuing; such as RST or simple ACK with no data in the segments.
     The TCP implementation does not calculate RTT. Instead, a fixed RTT of 1sec is used, and retransmission wait time is doubled

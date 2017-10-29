@@ -266,7 +266,7 @@ void accept_callback(pcbid_t connection)
 
     ip4addr = tcp_remote_addr(connection);
     stack_ip4addr_ntoa(ip4addr, ip, 17);
-    printf("==> accepted new connection from: %s\n", ip);
+    printf("==> accepted new connection %d from: %s\n", connection, ip);
     tcpServer = connection;
 }
 
@@ -371,7 +371,7 @@ int main(int argc, char* argv[])
             assert(tcpListner >= 0);                                            // make sure it is valid
             assert(tcp_bind(tcpListner,IP4_ADDR(192,168,1,19),60001) == ERR_OK);// bind on port 60001
             assert(tcp_listen(tcpListner) == ERR_OK);                           // listen to bound IP/port
-            assert(tcp_notify(tcpListner, notify_callback) == ERR_OK);          // notify on remote connection close
+            //assert(tcp_notify(tcpListner, notify_callback) == ERR_OK);          // notify on remote connection close
             assert(tcp_accept(tcpListner, accept_callback) == ERR_OK);          // connection acceptance callback
         }
         else if ( strcmp(argv[i], "-c") == 0 )
@@ -472,25 +472,33 @@ int main(int argc, char* argv[])
             if ( recvResult < 0 &&                                          // negative results are errors
                  recvResult != recvErr )                                    // prevent re-printing of same error
             {
-                printf("tcp_recv() error code %d\n", recvResult);
+                printf("tcp_recv(%d) error code %d\n", tcpServer, recvResult);
                 recvErr = recvResult;
             }
             else if ( recvResult > 0 )                                      // positive results larger than 0
             {
-                printf("tcp_recv() [");
+                printf("tcp_recv(%d) [", tcpServer);
                 for ( i = 0; i < recvResult; i++ )                          // are character data sent by the remote client
                 {
                     printf("%c", data[i]);                                  // assume these are all printable characters
                 }
                 printf("]\n");
+                issueTcpClose = tcp_close(tcpServer);
+                printf("tcp_close(%d) returned %d\n", tcpServer, issueTcpClose);  // close the connection
+                if ( issueTcpClose == 0 )                                         // reset the flag
+                {
+                    tcpServer = -1;
+                }
             }
             
+/*
             if ( issueTcpClose == 1 &&                                      // if we detected a remote close
                  recvResult <= 0 )                                          // and no more data to read
             {
-                printf("tcp_close() returned %d\n", tcp_close(tcpServer));  // close the connection
+                printf("tcp_close(%d) returned %d\n", tcpServer, tcp_close(tcpServer));  // close the connection
                 issueTcpClose = 0;                                          // reset the flag
             }
+*/
         }
 
         if ( whatToDo == PING )

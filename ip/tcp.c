@@ -747,7 +747,12 @@ static void tcp_input_handler(struct pbuf_t* const p)
         {
             newConnPcb = tcp_new();                                                         // allocate connection PCB
             if ( newConnPcb < ERR_OK )                                                      // drop the connection request if no PCB resources
+            {
+#if DEBUG_ON
+                printf("%s() cannot allocate PCB\n", __func__);
+#endif
                 return;
+            }
             tcpPCB[newConnPcb].state = LISTEN;                                              // duplicate the LISTENing PCB to the new active connection
             tcpPCB[newConnPcb].timeInState = tcpPCB[pcbId].timeInState;
             tcpPCB[newConnPcb].localIP = tcpPCB[pcbId].localIP;
@@ -775,6 +780,7 @@ static void tcp_input_handler(struct pbuf_t* const p)
             else
             {
                 free_tcp_pcb(newConnPcb);                                                   // abort if fatal failure, close the connection and free resources
+                // TODO should send a reset here?
             }
         }
     }
@@ -1128,12 +1134,12 @@ static void tcp_input_handler(struct pbuf_t* const p)
             case FIN_WAIT1:
             case FIN_WAIT2:
                 if ( tcpPCB[pcbId].SEG_LEN > 0 &&
-                     (bytes = TCP_DATA_BUF_SIZE - tcpPCB[pcbId].recvCnt) > 0 )              // determine space available for data
+                     (bytes = ((int)TCP_DATA_BUF_SIZE) - tcpPCB[pcbId].recvCnt) > 0 )       // determine space available for data
                 {
                     dp = (uint8_t *)(((uint8_t *)tcp) +  dataOff);                          // pointer to segment's data (text)
                         
-                    if ( bytes > tcpPCB[pcbId].SEG_LEN )                                    // adjust count to lower number
-                        bytes = tcpPCB[pcbId].SEG_LEN;
+                    if ( bytes > (int)tcpPCB[pcbId].SEG_LEN )                               // adjust count to lower number
+                        bytes = (int)tcpPCB[pcbId].SEG_LEN;
 
                     for ( i = 0; i < bytes; i++ )                                           // byte copy loop
                     {
@@ -1143,8 +1149,8 @@ static void tcp_input_handler(struct pbuf_t* const p)
                         tcpPCB[pcbId].recvWRp &= CIRC_BUFFER_MASK;                          // quick way to make pointer circular
                     }
                     
-                    tcpPCB[pcbId].RCV_NXT += bytes;                                         // adjust next ACK parameter
-                    tcpPCB[pcbId].RCV_WND -= bytes;                                         // adjust windows size to space in buffer
+                    tcpPCB[pcbId].RCV_NXT += (uint32_t)bytes;                               // adjust next ACK parameter
+                    tcpPCB[pcbId].RCV_WND -= (uint16_t)bytes;                               // adjust windows size to space in buffer
 
                     if ( flags & TCP_FLAG_PSH )                                             // notify application of PUSH flag
                     {
@@ -1351,7 +1357,7 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
     /* before building a segment to send, check if that segment will
      * need to be queued: i.e. will carry data and/or have flags other that ACK.
      * if the segment will need to be queued, then check if there is room in the send queue
-     * and no segment is still waiting for an ACK; if ues, then exit here.
+     * and no segment is still waiting for an ACK; if yes, then exit here.
      * if the segment is just and empty ACK segment then send it
      */
 #if DEBUG_ON
@@ -1377,7 +1383,7 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
 
     /* at this point we know we can queue a segment if we need to
      * or that we can send one if the queue is in use but the segment
-     * does not need queuing special handling for queuing ACK segments
+     * does not need queuing. special handling for queuing ACK segments
      * is added so that we do not queue ACK segments that do not carry data
      */
     tcp->seq = stack_htonl(tcpPCB[pcbId].SND_NXT);
@@ -1623,7 +1629,7 @@ static void tcp_timeout_handler(uint32_t now)
         switch ( tcpPCB[i].state )
         {
             case TIME_WAIT:
-                if ((now - tcpPCB[i].timeInState) >= (2 * TCP_MSL_TIMEOUT)) // and 2xMSL timeout has expired
+                if ((now - tcpPCB[i].timeInState) >= ((uint32_t)(2 * TCP_MSL_TIMEOUT))) // and 2xMSL timeout has expired
                 {
                     free_tcp_pcb(i);                                        // close the connection and free resources
                 }
@@ -1675,5 +1681,7 @@ static void free_tcp_pcb(pcbid_t pcbId)
         pbuf_free(tcpPCB[pcbId].pbufQ);                                     // free the pbuf
 
     memset(&(tcpPCB[pcbId]), 0, sizeof(struct tcp_pcb_t));                  // clear all resources associated with this PCB
+    tcpPCB[pcbId].send = &(sendBuff[pcbId][0]);                             // re-link to send and receive buffers
+    tcpPCB[pcbId].recv = &(recvBuff[pcbId][0]);
     set_state(pcbId,FREE);                                                  // close the connection
 }
