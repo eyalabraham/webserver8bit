@@ -86,7 +86,13 @@ HTTPDLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos   \
                OPTION STACK=16k                           \
                OPTION MAP=httpd                           \
                OPTION ELIMINATE
-                 
+
+STARTLINKCFG  = LIBPATH /home/eyal/bin/watcom/lib286/dos  \
+            LIBPATH /home/eyal/bin/watcom/lib286          \
+            FORMAT DOS                                    \
+            OPTION MAP=startup                            \
+            OPTION ELIMINATE                              \
+
 WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
             LIBPATH /home/eyal/bin/watcom/lib286     \
             FORMAT DOS                               \
@@ -166,6 +172,14 @@ httpd.o: httpd.c
 
 httpd.exe: httpd.o ppispi.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ) $(TRANSPORTOBJ)
 	$(LINK) $(HTTPDLINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
+
+#------------------------------------------------------------------------------------
+# generate startup.exe
+#------------------------------------------------------------------------------------
+startup: startup.exe
+
+startup.exe: startup.o
+	$(LINK) $(STARTLINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
 
 #------------------------------------------------------------------------------------
 # generate ws.exe
