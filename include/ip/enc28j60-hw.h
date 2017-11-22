@@ -92,6 +92,7 @@ struct enc28j60_t
 #define     MACON3_TXCRCEN      0x10
 #define     MACON3_PADCFG       0xa0
 #define     MACON3_FULDPX       0x01
+#define     MACON4_DEFER        0x40
 #define     PHCON1_PDPXMD       0x0100          // must match MACON3_FULDPX setting
 #define     PHCON1_PLOOPBK      0x4000
 #define     PHCON2_HDLDIS       0x0100
@@ -110,12 +111,12 @@ struct enc28j60_t
     ENC28J60 initialization parameters
 ----------------------------------------- */
 #define     INIT_ERXST          0x0000          // receive buffer start 0x0000 (errata #5, DS80349C)
-#define     INIT_ERXND          0x13ff          // receive buffer end 0x13ff (5K byte)
+#define     INIT_ERXND          0x16ff          // receive buffer end (size 5.75K byte)
 #define     INIT_ERXRDPT        INIT_ERXST      // receiver read pointer 0x0000
 #define     INIT_ERXWRPT        INIT_ERXST      // receiver write pointer 0x0000
 #define     INIT_ERDPT          INIT_ERXST      // receiver read pointer
 
-#define     INIT_ETXST          0x1500          // transmit buffer start 0x1500
+#define     INIT_ETXST          0x1800          // transmit buffer start
 #define     INIT_EWRPT         (INIT_ETXST+1)   // transmitter write pointer, one byte after PER_PACK_CTRL location
 
 #define     INIT_ERXFCON        0xa1            // see section 8.0 RECEIVE FILTERS, pg.49

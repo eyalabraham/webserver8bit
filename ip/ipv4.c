@@ -208,7 +208,6 @@ static void ip4_icmp_handler(struct pbuf_t* const p, struct net_interface_t* con
     struct pbuf_t       *q;
     uint16_t             ipHeaderLen;
     uint16_t             payloadLen;
-    ip4_err_t            result;
 
     ip_in = (struct ip_header_t*) &(((struct ethernet_frame_t*)(p->pbuf))->payloadStart); // pointer to IP packet header
 
@@ -251,13 +250,13 @@ static void ip4_icmp_handler(struct pbuf_t* const p, struct net_interface_t* con
 
             q->len = FRAME_HDR_LEN + IP_HDR_LEN + ICMP_HDR_LEN + payloadLen;    // set packet length
 
-            result = arp_output(netif, q);                                      // send the packet through the interface it came from
+            arp_output(netif, q);                                               // send the packet through the interface it came from
 
             pbuf_free(q);                                                       // free the transmit buffer
             break;
 
         case ECHO_REPLY:                                                        // we got a reply from our ICMP ping
-            if ( stack.icmp_input_handler )                                     // check if ping app registered to get a response, drop for now
+            if ( stack.icmp_input_handler )                                     // check if ping app registered to get a response, drop otherwise
                 stack.icmp_input_handler(p);
             break;
 

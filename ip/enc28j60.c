@@ -3,7 +3,7 @@
   enc28j60.c
 
    This is an Ethernet Interface driver for Microchip ENC28J60.
-   If follows the basic skeleton driver staructure and implements
+   It follows the LwIP skeleton driver staructure, and implements
    driver support for my setup
 
    Eyal Abraham, March 2017
@@ -40,7 +40,7 @@ static spiDevErr_t  readControlRegister(ctrlReg_t, uint8_t*);
 static spiDevErr_t  writeControlRegister(ctrlReg_t, uint8_t);
 static spiDevErr_t  readPhyRegister(phyReg_t, uint16_t*);
 static spiDevErr_t  writePhyRegister(phyReg_t, uint16_t);
-static spiDevErr_t  controlBit(ctrlReg_t, uint8_t);
+static int          controlBit(ctrlReg_t, uint8_t);
 static spiDevErr_t  setControlBit(ctrlReg_t, uint8_t);
 static spiDevErr_t  clearControlBit(ctrlReg_t, uint8_t);
 #if DRV_DMA_IO
@@ -268,10 +268,10 @@ ABORT_PHYWR:
  *  bitwise AND with 'position'.
  *
  * ----------------------------------------- */
-static spiDevErr_t controlBit(ctrlReg_t reg, uint8_t position)
+static int controlBit(ctrlReg_t reg, uint8_t position)
 {
     uint8_t     value;
-    spiDevErr_t result = 0;                             // which is also 'SPI_BUSY'...
+    spiDevErr_t result = 0;
 
     if ( readControlRegister(reg, &value) == SPI_OK)    // get register value
         result = ((value & position) ? 1 : 0);
@@ -585,15 +585,17 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
     printf("  len=%u txBufferEnd=0x%04x\n", p->len, tempU16);
 #endif
 
+#if !FULL_DUPLEX
     setControlBit(ECON1, ECON1_TXRST);                          // implementing per errata #12 (document DS80349C)
     clearControlBit(ECON1, ECON1_TXRST);
     clearControlBit(EIR, EIR_TXERIF);
+#endif
 
     clearControlBit(EIR, EIR_TXIF);                             // clear transmit interrupt flag
     setControlBit(ECON1, ECON1_TXRTS);                          // enable/start frame transmission
 
-    while ( !controlBit(EIR, EIR_TXIF) &&                       // per errata #13 (document DS80349C)
-            !controlBit(EIR, EIR_TXERIF) ) {}                   // wait for transmission to complete or to error out
+    while ( controlBit(EIR, EIR_TXIF) == 0 &&                   // per errata #13 (document DS80349C)
+            controlBit(EIR, EIR_TXERIF) == 0 ) {}               // wait for transmission to complete or to error out
 
     clearControlBit(ECON1, ECON1_TXRTS);
 
@@ -609,10 +611,11 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
             ethif->txStatVector.txTotalXmtCount);
 #endif
 
-    if ( controlBit(EIR, EIR_TXERIF) )                          // check for errors
+    if ( controlBit(EIR, EIR_TXERIF) ||
+         controlBit(ESTAT, ESTAT_TXABRT) )                      // check for errors
     {
         if ( ethif->txStatVector.txStatus2 & LATE_COLL_STAT )   // determine type of transmit link collisions
-            result = ERR_TX_LCOLL;                              // TODO should address errata #15 here
+            result = ERR_TX_LCOLL;                              // per errata #15
         else
             result = ERR_TX_COLL;
 
@@ -798,6 +801,7 @@ struct enc28j60_t* enc28j60Init(void)
 #else
     clearControlBit(MACON1, (MACON1_TXPAUS | MACON1_RXPAUS));                   // for half duplex, clear TXPAUS and RXPAUS
     clearControlBit(MACON3, MACON3_FULDPX);                                     // clear for half duplex
+    setControlBit(MACON4, MACON4_DEFER);                                        // wait indefinitely for medium to become free
     writeControlRegister(MACLCON1, INIT_MACLCON1);                              // retransmission maximum
     writeControlRegister(MACLCON2, INIT_MACLCON2);                              // collision window
 #endif

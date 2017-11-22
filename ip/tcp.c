@@ -1472,7 +1472,7 @@ static ip4_err_t send_segment(pcbid_t pcbId, uint16_t flags)
     {
         tcpPCB[pcbId].sendTime = tcpPCB[pcbId].SND_opt.time;                            // time stamp for retransmit calculations and Ack segment matching
         tcpPCB[pcbId].resendTime = tcpPCB[pcbId].SND_opt.time;
-        tcpPCB[pcbId].retranCnt = 1;                                                    // retransmit count
+        tcpPCB[pcbId].retranCnt = 0;                                                    // retransmit count
         tcpPCB[pcbId].pbufQ = p;                                                        // queue the segment
     }
     else
@@ -1623,6 +1623,7 @@ static uint32_t pseudo_header_sum(pcbid_t pcbId, uint16_t tcpLen)
 static void tcp_timeout_handler(uint32_t now)
 {
     pcbid_t     i;
+    uint32_t    timeOut;
 
     for (i = 0; i < TCP_PCB_COUNT; i++)                                     // scan PCB list
     {
@@ -1645,19 +1646,20 @@ static void tcp_timeout_handler(uint32_t now)
                 break;
         }
 
-        if ( tcpPCB[i].pbufQ != NULL )                                      // if a segment is not queued
+        if ( tcpPCB[i].pbufQ != NULL )                                      // if a segment is queued
         {
+            timeOut = tcpPCB[i].RT0 << tcpPCB[i].retranCnt;                 // calculate retransmit timeout value
             if ( tcpPCB[i].retranCnt > TCP_MAX_RETRAN )                     // check if the retransmit count was exceeded
             {
                 send_rst(i);                                                // if yes, so reset connection
                 send_sig(i,TCP_EVENT_ABORTED);                              // signal the application that the connection is being aborted
                 free_tcp_pcb(i);                                            // close the connection
             }                                                               // otherwise
-            else if ( (now - tcpPCB[i].resendTime) >= (tcpPCB[i].RT0 * tcpPCB[i].retranCnt) )
+            else if ( (now - tcpPCB[i].resendTime) >= timeOut )
             {                                                               // if the RTT time was exceeded then
                 ip4_output(tcpPCB[i].remoteIP, IP4_TCP, tcpPCB[i].pbufQ);   // retransmit the TCP segment
                 tcpPCB[i].resendTime = now;
-                tcpPCB[i].retranCnt *= 2;                                   // double the retransmit interval
+                tcpPCB[i].retranCnt++;                                      // increment retransmit count -> double the interval
             }
         }
     }
