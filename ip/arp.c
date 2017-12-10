@@ -285,7 +285,7 @@ ip4_err_t arp_output(struct net_interface_t* const netif, struct pbuf_t* const p
         copy_hwaddr(frame->dest, hwaddr);                           // copy destination HW address
         frame->type = stack_ntoh(TYPE_IPV4);                        // IPv4 frame type
         if ( (netif->flags & (NETIF_FLAG_UP + NETIF_FLAG_LINK_UP)) && netif->linkoutput )
-            result = netif->linkoutput(netif->state, p);            // send the frame *** p->len should already be set ***
+            result = netif->linkoutput(netif, p);                   // send the frame *** p->len should already be set ***
         else
             result = ERR_NETIF;
     }
@@ -359,7 +359,7 @@ static ip4_err_t arp_send(struct net_interface_t* const netif, hwaddr_t *dest, h
 
         p->len = FRAME_HDR_LEN + ARP_LEN;
         if ( (netif->flags & (NETIF_FLAG_UP + NETIF_FLAG_LINK_UP)) && netif->linkoutput )
-            result = netif->linkoutput(netif->state, p);        // send the frame
+            result = netif->linkoutput(netif, p);               // send the frame
         else
             result = ERR_NETIF;
         pbuf_free(p);                                           // free the pbuf
@@ -460,7 +460,7 @@ static void arp_unqueue(void)
             copy_hwaddr(frame->dest, hwaddr);                               // copy destination HW address
             frame->type = stack_ntoh(TYPE_IPV4);                            // IPv4 frame type
             if ( (arpQ[i].netif->flags & (NETIF_FLAG_UP + NETIF_FLAG_LINK_UP)) && arpQ[i].netif->linkoutput )
-                arpQ[i].netif->linkoutput(arpQ[i].netif->state, arpQ[i].p); // send the frame
+                arpQ[i].netif->linkoutput(arpQ[i].netif, arpQ[i].p);        // send the frame
 
             pbuf_free(arpQ[i].p);                                           // we're done, free the pbuf
             arpQ[i].ipAddr = 0;                                             // drop the packet even if there are errors sending it

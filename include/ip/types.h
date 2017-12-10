@@ -386,10 +386,10 @@ struct net_interface_t                                          // general netwo
     void        (*forward_input)(struct pbuf_t* const,          // forward data to next layer   // @@ don't think we need a 'netif' here?
                                  struct net_interface_t* const);
 
-    struct pbuf_t* const (*linkinput)(struct enc28j60_t* const);// link input function, set to link_input()
-    ip4_err_t   (*linkoutput)(struct enc28j60_t*,               // packet output function, send data buffer as-is
+    struct pbuf_t* const (*linkinput)(struct net_interface_t* const); // link input function, set to link_input()
+    ip4_err_t   (*linkoutput)(struct net_interface_t* const,    // packet output function, send data buffer as-is
                               struct pbuf_t* const);            // set to link_output()
-    struct enc28j60_t* (*driver_init)(void);                    // pointer to HW and driver initialization function
+    void*       (*driver_init)(void);                           // pointer to HW and driver initialization function
     int         (*linkstate)(void);                             // check and return link state 'up' or 'down'
                                                                 // @@ 'linkstate' link state change call-back function
 };

@@ -61,6 +61,7 @@ void stack_init(void)
         pBuf[i].len = PBUF_FREE;
 
     // initialize timers
+    assert(STACK_TIMER_COUNT>=3);
     for (i = 0; i < STACK_TIMER_COUNT; i++)
     {
         timers[i].milisec_timeout = 0;
@@ -94,7 +95,7 @@ struct net_interface_t* const stack_get_ethif(uint8_t num)
  *  setup a route table entry
  *
  *  param:  subnet mask and gateway in four octet format, network interface number
- *  return: ERR_OK if entry was set or ip4_err_t if value if not
+ *  return: ERR_OK if entry was set or ip4_err_t value if not
  *
  */
 ip4_err_t stack_set_route(ip4_addr_t nm, ip4_addr_t gw, uint8_t netif_num)
@@ -104,9 +105,9 @@ ip4_err_t stack_set_route(ip4_addr_t nm, ip4_addr_t gw, uint8_t netif_num)
 
     for (i = 0; i < ROUTE_TABLE_LENGTH; i++)            // scan the route table
     {
-        if ( stack.routeTable[i].destNet == 0 )         // for en empty slot
+        if ( stack.routeTable[i].destNet == 0 )         // for an empty slot
         {
-            stack.routeTable[i].destNet = gw & nm;      // an populate with the route parameters
+            stack.routeTable[i].destNet = gw & nm;      // and populate with the route parameters
             stack.routeTable[i].netMask = nm;
             stack.routeTable[i].gateway = gw;
             stack.routeTable[i].netIf   = netif_num;

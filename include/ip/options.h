@@ -25,17 +25,17 @@
 #define     HOSTNAME_LENGTH     10
 #define     HOSTNAME            "nec-v25\0"
 
-#define     RX_BUFS             1           // # of input packet buffers, relying on enc28j60 8K buffering
-#define     TX_BUFS             3           // # of output packet buffers
+#define     RX_BUFS             1           // # of input packet buffers, relying on device driver buffering
+#define     TX_BUFS             7           // # of output packet buffers
 #define     ARP_QUEUE_BUFS      2           // # of queuing buffers for packets waiting for ARP resolution
 #define     PACKET_BUFS         (RX_BUFS+TX_BUFS+ARP_QUEUE_BUFS)
-#define     MAX_PBUFS           8           // max # of RX or TX buffers
+#define     MAX_PBUFS           10          // max # of RX or TX buffers
 #define     PACKET_BUF_SIZE     1536        // size of packet buffer in bytes
 
-#define     STACK_TIMER_COUNT   4           // timers that the stack manages, minimum of 1
+#define     STACK_TIMER_COUNT   4           // timers that the stack manages (minimum of 3: 1 x TCP, 2 x ARP)
 
 /*
- * Physical layer setup options, ethernet HW
+ * Physical layer setup options, Ethernet HW
  *
  */
 #define     ETHIF_NAME_LENGTH   5
@@ -49,10 +49,17 @@
 #define     MAC5                0x00
 
 #define     FULL_DUPLEX         0           // set to 0 for half-duplex setup
-#define     INTERFACE_COUNT     1           // # of ethernet interfaces in the system
+#define     INTERFACE_COUNT     2           // # of ethernet interfaces in the system
 #define     DRV_DMA_IO          1           // set to 1 for DMA based IO
 
 #define     MTU                 1500
+
+/*
+ * SLIP setup options
+ *
+ */
+#define     SLIP_NAME           "sl0\0"     // SLIP interface's identifier
+#define     SLIP_BAUD           9600        // valid rates: '9600' and '19200'
 
 /*
  * Data Link layer setup options, buffers, ARP etc

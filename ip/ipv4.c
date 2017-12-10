@@ -104,7 +104,9 @@ void ip4_input(struct pbuf_t* const p, struct net_interface_t* const netif)
  *  leaving room at the top of the pbuf for a IPv4 header and a frame header, and then passed
  *  to this function for output.
  *  ip4_output() will build the IPv4 header, then search through the routing table to pick
- *  the appropriate interface. Output will be done through arp_output().
+ *  the appropriate interface. In most cases output will be done through arp_output(), but
+ *  with a slip interface this packet will go directly to the output function of SLIP.
+ *  The output call uses netif->output that defines the appropriate output function.
  *
  * param:  destination IP, protocol type to be sent, and a pointer to output pbuf
  * return: ERR_OK if send was successful, ip4_err_t on error
@@ -153,7 +155,8 @@ ip4_err_t ip4_output(ip4_addr_t dest, ip4_protocol_t protocol, struct pbuf_t* co
             {
                 ipHeader->srcIp = netif->ip4addr;
                 ipHeader->checksum = ~(stack_checksum(ipHeader, IP_HDR_LEN));   // calculate IP header checksum
-                result = arp_output(netif, p);                                  // send the packet
+                if ( netif->output )
+                    result = netif->output(netif, p);                           // send the packet
             }
             else
             {
@@ -177,7 +180,8 @@ ip4_err_t ip4_output(ip4_addr_t dest, ip4_protocol_t protocol, struct pbuf_t* co
         {
             ipHeader->srcIp = netif->ip4addr;
             ipHeader->checksum = ~(stack_checksum(ipHeader, IP_HDR_LEN));       // calculate IP header checksum
-            result = arp_output(netif, p);                                      // send the packet
+            if ( netif->output )
+                result = netif->output(netif, p);                               // send the packet
         }
         else
         {
@@ -250,7 +254,8 @@ static void ip4_icmp_handler(struct pbuf_t* const p, struct net_interface_t* con
 
             q->len = FRAME_HDR_LEN + IP_HDR_LEN + ICMP_HDR_LEN + payloadLen;    // set packet length
 
-            arp_output(netif, q);                                               // send the packet through the interface it came from
+            if ( netif->output )
+                netif->output(netif, q);                                        // send the packet through the interface it came from
 
             pbuf_free(q);                                                       // free the transmit buffer
             break;

@@ -19,8 +19,8 @@
    interface functions
 ----------------------------------------- */
 struct enc28j60_t*   enc28j60Init(void);
-ip4_err_t            link_output(struct enc28j60_t*, struct pbuf_t*);
-struct pbuf_t* const link_input(struct enc28j60_t*);
+ip4_err_t            link_output(struct net_interface_t* const, struct pbuf_t*);
+struct pbuf_t* const link_input(struct net_interface_t* const);
 int                  link_state(void);                      // test link condition
 
 #endif  /* __ENC28J60_H__ */

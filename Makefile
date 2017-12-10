@@ -76,14 +76,14 @@ SPITESTLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
 ETHTESTLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
                  FORMAT DOS                               \
-                 OPTION STACK=16k                         \
+                 OPTION STACK=4k                          \
                  OPTION MAP=ethtest                       \
                  OPTION ELIMINATE
 
 HTTPDLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos   \
                LIBPATH /home/eyal/bin/watcom/lib286       \
                FORMAT DOS                                 \
-               OPTION STACK=16k                           \
+               OPTION STACK=4k                            \
                OPTION MAP=httpd                           \
                OPTION ELIMINATE
 

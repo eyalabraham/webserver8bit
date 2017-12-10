@@ -34,7 +34,7 @@ enum {ARP, PING, NTP, SRVR, CLNT} whatToDo;
 #define     USAGE                   "ethtest -r {ARP and PING response} | -p {ping an address} | -t {NTP} | -s {TCP server} | -c {TCP client}\n"
 
 // PING
-#define     WAIT_FOR_PING_RESPONSE  1000            // in mSec
+#define     WAIT_FOR_PING_RESPONSE  10000           // in mSec
 #define     TEXT_PAYLOAD_LEN        30
 #define     PING_TEXT               "Ping from FlashLite v25\0"
 
@@ -297,7 +297,7 @@ int main(int argc, char* argv[])
     netif = stack_get_ethif(0);                                     // get pointer to interface 0
     assert(netif);
 
-    assert(interface_init(netif) == ERR_OK);                        // initialize interface and link HW
+    assert(interface_slip_init(netif) == ERR_OK);                   // initialize interface and link HW
     interface_set_addr(netif, IP4_ADDR(192,168,1,19),               // setup static IP addressing
                               IP4_ADDR(255,255,255,0),
                               IP4_ADDR(192,168,1,1));
@@ -314,7 +314,6 @@ int main(int argc, char* argv[])
     if ( result != ERR_OK )
     {
         printf("arp_gratuitous() failed with %d\n", result);
-        return -1;
     }
 
     /* parse command line variables

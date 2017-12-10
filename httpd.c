@@ -172,6 +172,7 @@ int main(int argc, char* argv[])
     int                     conn;
     pcbid_t                 tcpListner;
     struct net_interface_t *netif;
+    struct net_interface_t *slipif;
 
     printf("Build: httpd.exe %s %s\n", __DATE__, __TIME__);
 
@@ -189,7 +190,7 @@ int main(int argc, char* argv[])
     assert(stack_set_route(NETMASK, GATEWAY, 0) == ERR_OK);
     netif = stack_get_ethif(0);
     assert(netif);
-    assert(interface_init(netif) == ERR_OK);
+    assert(interface_slip_init(netif) == ERR_OK);
     interface_set_addr(netif, HTTPD_IP, NETMASK, GATEWAY);
     printf("Initialized network interface\n");
 
@@ -209,8 +210,7 @@ int main(int argc, char* argv[])
 
     if ( result != ERR_OK )
     {
-        printf("Failed arp_gratuitous() with %d\nExiting\n", result);
-        return -1;
+        printf("Failed arp_gratuitous() with %d\n", result);
     }
 
     /* prepare a TCP connection for an HTTP server

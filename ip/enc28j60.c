@@ -3,7 +3,7 @@
   enc28j60.c
 
    This is an Ethernet Interface driver for Microchip ENC28J60.
-   It follows the LwIP skeleton driver staructure, and implements
+   It follows the LwIP skeleton driver structure, and implements
    driver support for my setup
 
    Eyal Abraham, March 2017
@@ -552,22 +552,25 @@ static void extractPacketInfo(struct enc28j60_t *ethif)
  * This function does the actual transmission of the packet.
  * The packet is contained in the pbuf that is passed to the function.
  *
- * param:  'ethif' the device interface structure for this ethernet interface
+ * param:  'netif' the interface structure for this ethernet interface
  *         p the packet pbuf to send (e.g. IP packet including MAC addresses and type)
  * return: ERR_OK if the packet could be sent
  *         an ip4_err_t value if the packet couldn't be sent
  *
  * ----------------------------------------- */
-ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
+ip4_err_t link_output(struct net_interface_t* const netif, struct pbuf_t *p)
 {
-    uint8_t     tempU8;
-    uint16_t    tempU16;
-    ip4_err_t   result = ERR_OK;
+    uint8_t             tempU8;
+    uint16_t            tempU16;
+    struct enc28j60_t  *ethif;
+    ip4_err_t           result = ERR_OK;
 
 #ifdef DRV_DEBUG_FUNC_NAME
     printf("enter: %s()\n",__func__);
 #endif
 
+    ethif = (struct enc28j60_t*)netif->state;
+    
     writeControlRegister(ETXSTL, LOW_BYTE(INIT_ETXST));         // explicitly set the transmit buffer start
     writeControlRegister(ETXSTH, HIGH_BYTE(INIT_ETXST));
 
@@ -633,14 +636,15 @@ ip4_err_t link_output(struct enc28j60_t *ethif, struct pbuf_t *p)
  * allocate a pbuf and transfer the bytes of the incoming
  * packet from the interface into the pbuf.
  *
- * param:  'ethif' pointer to the device interface to be read
+ * param:  'netif' pointer to the interface to be read
  * return: a pbuf filled with the received packet (including MAC header)
  *         NULL on memory error
  * ----------------------------------------- */
-struct pbuf_t* const link_input(struct enc28j60_t *ethif)
+struct pbuf_t* const link_input(struct net_interface_t* const netif)
 {
-    struct pbuf_t  *p;
-    uint16_t        len;
+    struct pbuf_t      *p;
+    uint16_t            len;
+    struct enc28j60_t  *ethif;
 
 #ifdef DRV_DEBUG_FUNC_NAME
     printf("enter: %s()\n",__func__);
@@ -649,6 +653,8 @@ struct pbuf_t* const link_input(struct enc28j60_t *ethif)
     if ( !packetWaiting() )
         return NULL;
 
+    ethif = (struct enc28j60_t*)netif->state;
+    
     // update ERDPT to point to next packet read address start
     writeControlRegister(ERDPTL, ethif->rxStatVector.nextPacketL);
     writeControlRegister(ERDPTH, ethif->rxStatVector.nextPacketH);
