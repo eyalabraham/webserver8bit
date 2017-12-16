@@ -190,7 +190,7 @@ int main(int argc, char* argv[])
     assert(stack_set_route(NETMASK, GATEWAY, 0) == ERR_OK);
     netif = stack_get_ethif(0);
     assert(netif);
-    assert(interface_slip_init(netif) == ERR_OK);
+    assert(interface_init(netif) == ERR_OK);
     interface_set_addr(netif, HTTPD_IP, NETMASK, GATEWAY);
     printf("Initialized network interface\n");
 
