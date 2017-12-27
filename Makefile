@@ -88,10 +88,16 @@ HTTPDLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos   \
                OPTION ELIMINATE
 
 STARTLINKCFG  = LIBPATH /home/eyal/bin/watcom/lib286/dos  \
-            LIBPATH /home/eyal/bin/watcom/lib286          \
-            FORMAT DOS                                    \
-            OPTION MAP=startup                            \
-            OPTION ELIMINATE                              \
+            	LIBPATH /home/eyal/bin/watcom/lib286      \
+            	FORMAT DOS                                \
+            	OPTION MAP=startup                        \
+            	OPTION ELIMINATE                          \
+
+VT100LINKCFG  = LIBPATH /home/eyal/bin/watcom/lib286/dos  \
+                LIBPATH /home/eyal/bin/watcom/lib286      \
+                FORMAT DOS                                \
+                OPTION MAP=vt100lcd                       \
+                OPTION ELIMINATE                          \
 
 WSLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
             LIBPATH /home/eyal/bin/watcom/lib286     \
@@ -180,6 +186,16 @@ startup: startup.exe
 
 startup.exe: startup.o
 	$(LINK) $(STARTLINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
+
+#------------------------------------------------------------------------------------
+# generate vt100lcd.exe
+#------------------------------------------------------------------------------------
+vt100tst: vt100tst.exe
+
+vt100lcd.o: vt100lcd.h ppispi.h st7735.h
+
+vt100tst.exe: vt100tst.o vt100lcd.o ppispi.o st7735.o xprintf.o
+	$(LINK) $(VT100LINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
 
 #------------------------------------------------------------------------------------
 # generate ws.exe

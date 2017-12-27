@@ -29,6 +29,7 @@ as well as Adafruit raw 1.8" TFT display
  *
  */
 
+#include    <sys/types.h>
 
 #ifndef     __st7735_h__
 #define     __st7735_h__
@@ -43,6 +44,9 @@ as well as Adafruit raw 1.8" TFT display
 #define     ST7735_YELLOW       0xFFE0
 #define     ST7735_WHITE        0xFFFF
 
+#define     FONT_PIX_WIDE       6
+#define     FONT_PIX_HIGH       8
+
 /* -----------------------------------------
    function prototypes
 ----------------------------------------- */
@@ -51,34 +55,35 @@ as well as Adafruit raw 1.8" TFT display
  *  general display functions
  *
  */
-void            lcdInit(void);                                              // initialize LCD
-int             lcdHeight(void);                                            // return display pixel height
-int             lcdWidth(void);                                             // return display pixel width
-void            lcdSetRotation(unsigned char);                              // screen rotation
-void            lcdInvertDisplay(int i);                                    // invert display
-unsigned int    lcdColor565(unsigned char, unsigned char, unsigned char);   // Pass 8-bit (each) R,G,B, get back 16-bit packed color
+void        lcdInit(void);                                          // initialize LCD
+int         lcdHeight(void);                                        // return display pixel height
+int         lcdWidth(void);                                         // return display pixel width
+void        lcdSetRotation(uint8_t);                                // screen rotation
+void        lcdInvertDisplay(int i);                                // invert display
+uint16_t    lcdColor565(uint8_t, uint8_t, uint8_t);                 // Pass 8-bit (each) R,G,B, get back 16-bit packed color
 
 /*------------------------------------------------
  *  direct access display functions
  *
  */
-void            lcdSetAddrWindow(unsigned char, unsigned char, unsigned char, unsigned char); //
-void            lcdPushColor(unsigned int);                                 // send color pixel to display
-void            lcdFillScreen(unsigned int);                                // fill screen with a solid color
-void            lcdDrawPixel(int, int, unsigned int);                       // draw a pixel
-void            lcdDrawFastVLine(int, int, int, unsigned int);              // vertical line
-void            lcdDrawFastHLine(int, int, int, unsigned int);              // horizontal line
-void            lcdFillRect(int, int, int, int, unsigned int);              // color filled rectangle
+void        lcdSetAddrWindow(uint8_t, uint8_t, uint8_t, uint8_t);   //
+void        lcdPushColor(uint16_t);                                 // send color pixel to display
+void        lcdFillScreen(uint16_t);                                // fill screen with a solid color
+void        lcdDrawPixel(int, int, uint16_t);                       // draw a pixel
+void        lcdDrawFastVLine(int, int, int, uint16_t);              // vertical line
+void        lcdDrawFastHLine(int, int, int, uint16_t);              // horizontal line
+void        lcdFillRect(int, int, int, int, uint16_t);              // color filled rectangle
+void        lcdDrawChar(uint16_t, uint16_t, char, uint16_t, uint16_t, int); // write character to LCD
 
 /*------------------------------------------------
  *  frame buffer display functions
  *  (using DMA)
  *
  */
-unsigned char*  lcdFrameBufferInit(unsigned int);                           // initialize a frame buffer with a color
-void            lcdFrameBufferFree(unsigned char*);                         // release memory reserved for the frame buffer
-int             lcdFrameBufferPush(unsigned char*, void(*)(void));          // tranfer frame buffer to LCD
-void            lcdFrameBufferScroll(int, unsigned int);                    // scroll frame buffer by +/- pixels and fill new ines with color
+uint8_t*    lcdFrameBufferInit(uint16_t);                           // initialize a frame buffer with a color
+void        lcdFrameBufferFree(uint8_t*);                           // release memory reserved for the frame buffer
+int         lcdFrameBufferPush(uint8_t*, void(*)(void));            // transfer frame buffer to LCD
+void        lcdFrameBufferScroll(int, uint16_t);                    // scroll frame buffer by +/- pixels and fill new lines with color
 
 #endif  /* end __st7735_h__ */
 
