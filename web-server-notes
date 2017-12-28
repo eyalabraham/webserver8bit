@@ -178,8 +178,8 @@ D0..D7  <------>| D0..D7   PB0..PB7 |------------->    PB0..PB2  FSEL0..FSEL2
           0           1           1           0           1           1            1        - Ethernet select - write
           1           0           0           1           1           1            0        - SD Card select - read
           1           0           1           1           1           1            0        - SD Card select - write
-          1           1           0           1           1           1            1        - Read AVR status
-          1           1           1           1           1           1            1        - Write AVR command
+          1           1           0           1           1           1            1        - Keep CS active after last command
+          1           1           1           1           1           1            1        - [not used]
 
 
 ======================================================
