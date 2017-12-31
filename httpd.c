@@ -32,6 +32,8 @@
 #include    "ip/types.h"
 
 #include    "ppispi.h"
+#include    "vt100lcd.h"
+#include    "xprintf.h"
 
 /*================================================
  * HTTPD types and definitions
@@ -167,12 +169,19 @@ int main(int argc, char* argv[])
 {
     int                     done = 0;
 
+    int                     freeCnt = 0;
+    int                     establishedCnt = 0;
+    int                     listeningCnt = 0;
+    int                     otherCnt = 0;
+    int                     heartbeat = '*';
+
+    uint32_t                time;
     int                     linkState, i;
     int                     result;
     int                     conn;
     pcbid_t                 tcpListner;
     struct net_interface_t *netif;
-    struct net_interface_t *slipif;
+    struct tcp_conn_state_t tcpConnState;
 
     printf("Build: httpd.exe %s %s\n", __DATE__, __TIME__);
 
@@ -183,16 +192,24 @@ int main(int argc, char* argv[])
      * - interface and link HW
      * - static IP addressing
      */
-    spiIoInit();
+    vt100_lcd_init(VT100_LANDSCAPE, ST7735_BLACK, ST7735_GREEN);
+    //spiIoInit();
     printf("Initialized IO\n");
     stack_init();
     printf("Initialized IP stack\n");
     assert(stack_set_route(NETMASK, GATEWAY, 0) == ERR_OK);
     netif = stack_get_ethif(0);
     assert(netif);
-    assert(interface_init(netif) == ERR_OK);
+
+    /* select here between ENC28L60 and SLIP
+     */
+    assert(interface_slip_init(netif) == ERR_OK);
+    //assert(interface_init(netif) == ERR_OK);
+
     interface_set_addr(netif, HTTPD_IP, NETMASK, GATEWAY);
     printf("Initialized network interface\n");
+
+    time = stack_time();
 
     /* test link state and send gratuitous ARP
      * if link is 'up' send a Gratuitous ARP with our IP address
@@ -239,6 +256,11 @@ int main(int argc, char* argv[])
     }
     printf("Created listening connection ID %d\n", tcpListner);
 
+    /* initialize LCD display with info text
+     */
+    xfprintf(vt100_lcd_putc, "\033[1;0fHTTPD v1.0 (%s)", __DATE__);
+    xfprintf(vt100_lcd_putc, "\033[4;0fTCP/IP connections\r\n FREE:\r\n ESTABLISHED:\r\n LISTENING:\r\n Other:");
+
     /* main loop
      *
      */
@@ -283,6 +305,55 @@ int main(int argc, char* argv[])
                 }
             }
         } /* poll active connections for HTTP requests/response */
+
+        /* scan TCP connection list and build
+         * statistics counters
+         */
+        i = 0;
+        freeCnt = 0;
+        establishedCnt = 0;
+        listeningCnt = 0;
+        otherCnt = 0;
+
+        while ( tcp_util_conn_state(i, &tcpConnState) )
+        {
+            if ( tcpConnState.state == FREE )
+                freeCnt++;
+            else if ( tcpConnState.state == ESTABLISHED )
+                establishedCnt++;
+            else if ( tcpConnState.state == LISTEN )
+                listeningCnt++;
+            else
+                otherCnt++;
+
+            i++;
+        }
+
+        /* print statistics counters to LCD
+         */
+        if ( (stack_time() - time) > 1000 )
+        {
+            time = stack_time();
+
+            if ( heartbeat == '*' )
+                heartbeat = ' ';
+            else
+                heartbeat = '*';
+
+            if ( freeCnt < 5 )
+            {
+                xfprintf(vt100_lcd_putc, "\033[31;40m\033[5;14f%2d", freeCnt);
+            }
+            else
+            {
+                xfprintf(vt100_lcd_putc, "\033[32;40m\033[5;14f%2d", freeCnt);
+            }
+            xfprintf(vt100_lcd_putc, "\033[32;40m\033[6;14f%2d", establishedCnt);
+            xfprintf(vt100_lcd_putc, "\033[7;14f%2d", listeningCnt);
+            xfprintf(vt100_lcd_putc, "\033[8;14f%2d", otherCnt);
+            xfprintf(vt100_lcd_putc, "\033[4;20f%c", heartbeat);
+        }
+
     } /* main loop */
 
     tcp_close(tcpListner);
@@ -336,7 +407,15 @@ void notify_callback(pcbid_t connection, tcp_event_t reason)
                     i = MAX_ACTIVE_SESS;
                 }
             }
-            printf("  Connection %d reset/aborted with: %s\n", connection, ip);
+
+            if ( reason == TCP_EVENT_ABORTED )
+            {
+                printf("  Connection %d aborted with: %s\n", connection, ip);
+            }
+            else
+            {
+                printf("  Connection %d reset by: %s\n", connection, ip);
+            }
             break;
 
             /* if data arrives/pushed from the client, then just
@@ -933,11 +1012,12 @@ int http_session_handler(int httpSes)
 #if __HTTPD_DEBUG__
                     printf(", Sent:%d", result);
 #endif
+                    if ( result > 0 )
+                    {
+                        sessions[httpSes].filePos += (long) result;
+                    }
                 }
-                if ( result > 0 )
-                {
-                    sessions[httpSes].filePos += (long) result;
-                }
+
                 if ( resource_eof(sessions[httpSes].resourceId, sessions[httpSes].filePos) )
                 {
                     sessions[httpSes].state = CLOSE;

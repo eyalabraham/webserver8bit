@@ -59,7 +59,7 @@ LINKDBG =
 endif
 
 #CCOPT = -0 -ml $(CCDBG) -zu -fh=$(PRECOMP) -s -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
-CCOPT = -0 -ml $(CCDBG) -zu -s -zp1 -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
+CCOPT = -0 -ml $(CCDBG) -zu -zp1 -i=/home/eyal/bin/watcom/h -i=$(INCDIR)
 ASMOPT = -0 -ml $(ASMDBG)
 SERLOOPLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
                  LIBPATH /home/eyal/bin/watcom/lib286     \
@@ -83,7 +83,7 @@ ETHTESTLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos \
 HTTPDLINKCFG = LIBPATH /home/eyal/bin/watcom/lib286/dos   \
                LIBPATH /home/eyal/bin/watcom/lib286       \
                FORMAT DOS                                 \
-               OPTION STACK=4k                            \
+               OPTION STACK=3k                            \
                OPTION MAP=httpd                           \
                OPTION ELIMINATE
 
@@ -174,9 +174,9 @@ ethtest.exe: ethtest.o ppispi.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ) $(TRANSPORT
 #------------------------------------------------------------------------------------
 httpd: httpd.exe
 
-httpd.o: httpd.c
+httpd.o: httpd.c ppispi.h
 
-httpd.exe: httpd.o ppispi.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ) $(TRANSPORTOBJ)
+httpd.exe: httpd.o vt100lcd.o ppispi.o st7735.o xprintf.o $(COREOBJ) $(NETIFOBJ) $(NETWORKOBJ) $(TRANSPORTOBJ)
 	$(LINK) $(HTTPDLINKCFG) FILE $(subst $(SPC),$(COM),$(notdir $^)) NAME $@
 
 #------------------------------------------------------------------------------------
